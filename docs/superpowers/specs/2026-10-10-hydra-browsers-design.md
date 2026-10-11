@@ -393,18 +393,28 @@ Validation rules:
   if the hostname is `localhost` or ends with `.localhost` (browsers treat these as secure contexts, so
   `Secure` and `__Host-` cookies work). The two URLs must be different and must have the same
   registrable domain. The `SameSite=Strict` live cookie needs the same site (section 9.2).
-  For development, use for example `http://hydra.localhost` and `http://live.hydra.localhost`.
+  For development on the host (section 11.7), use `http://hydra.localhost:5173` (the Vite dev server)
+  and `http://live.hydra.localhost:8080` (the gateway). Ports do not change the site.
   `localhost` and `live.localhost` are not the same site.
 - `HYDRA_SECRET_KEY` must decode to 32 bytes or more.
+- The first port of `HYDRA_MEDIA_PORT_RANGE` must be `30128` or more. The lower node ports are for
+  the fixed node ports of other Services (section 11.6).
 - The size of `HYDRA_MEDIA_PORT_RANGE` must be equal to or larger than `HYDRA_MAX_RUNNING`. The capacity
   check of Start counts the sessions that hold a media port (section 7.9), so a start that passes the
   check always finds a free port.
 - `HYDRA_SESSION_TRANSPORT=port-forward` is permitted only if both URLs use `localhost` hostnames.
 
-`HYDRA_MEDIA_PORT_RANGE` must be inside the k3s `service-node-port-range` (section 11.6). At start, the
-gateway sends a dry-run request (`dryRun=All`) for a NodePort Service with the first and the last port of
-the range. If the API server answers that a port is not in the valid range, the gateway stops with a
-message that names `HYDRA_MEDIA_PORT_RANGE`. Other answers (for example, a port in use) pass the check.
+`HYDRA_MEDIA_PORT_RANGE` must be inside the k3s `service-node-port-range` (section 11.6). At start,
+before the reconciler starts, the gateway checks the first and the last port of the range. For each
+port, it deletes a leftover Service `hydra-port-check-<port>` in `HYDRA_SESSION_NAMESPACE`, creates
+that NodePort Service (no selector, label `app.kubernetes.io/managed-by: hydra`), and deletes it
+at once. A dry-run request (`dryRun=All`) cannot do this check, because the API server does not check
+the node port range for a dry run.
+- If the API server answers that a port is not in the valid range, the gateway stops with a message
+  that names `HYDRA_MEDIA_PORT_RANGE`.
+- Other answers (for example, a port in use) pass the check.
+- If the API server does not answer, the gateway logs a warning and the check passes. `/readyz`
+  shows the problem (section 14).
 
 ---
 
@@ -445,7 +455,9 @@ $HYDRA_STATE_DIR/
 ```
 
 - Two StorageClasses use the `rancher.io/local-path` provisioner with
-  `pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}"`:
+  `pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"`:
+  - The trailing slash is necessary. The provisioner rejects a rendered path that does not start with
+    `<namespace>/<pvc name>/`. The folders on disk are the folders of the tree above.
   - `hydra-retain` (`reclaimPolicy: Retain`) for `gateway-data` and Traefik.
   - `hydra-profile` (`reclaimPolicy: Delete`) for session profiles. When a session is deleted, its
     profile folder is deleted.
@@ -494,8 +506,11 @@ $HYDRA_STATE_DIR/
   wait in a queue.
 - **Password rules (NIST SP 800-63B):** 12 to 128 characters, no composition rules, a check against a
   bundled list of common passwords, and the password must not be equal to the email.
-- **First admin:** `kubectl exec -n hydra deploy/hydra-gateway -- hydra user create --admin --email <e>`.
-  The command asks for the password and does not show it.
+- **First admin:** `kubectl exec -it -n hydra deploy/hydra-gateway -- hydra user create --admin --email <e>`.
+  If stdin is a terminal, the command asks for the password and does not show it. If stdin is not a
+  terminal, the command reads the password from the first line of stdin. Scripts and the E2E tests use
+  this form, for example `printf '%s\n' "$PASSWORD" | kubectl exec -i -n hydra deploy/hydra-gateway --
+  hydra user create --admin --email <e>`.
 - **Admin actions (UI and API):**
   - Create a user. The gateway generates a one-time password and shows it one time. The user must
     change it at the first login (`must_change_password`). While `must_change_password` is true, the
@@ -564,6 +579,10 @@ Session roles: `owner` (the creator, stored on the session row), `operator`, `vi
     for example because the Neko profile changed. The dashboard then requests a new ticket.
   - The MCP proxy closes the MCP streams of each token whose creator no longer has `token.create`
     (section 8.3). Section 6.6 condition 3 then rejects the next request of that token.
+  - The gateway closes the open `GET /api/events` streams of the user. The client connects again and
+    fetches the session data again (section 10.3), so the sidebar shows the new rights.
+  - The gateway closes each open `GET /api/sessions/<sid>/events` stream of the user for which the
+    user no longer has `audit.read`.
 
 ### 6.6 Agent tokens
 
@@ -722,7 +741,8 @@ session settings. Start from the Neko default policies and apply these changes:
 | `DiskCacheSize` | `536870912` (512 MiB) | `local-path` does not limit the profile size (section 5.2) |
 | `DownloadRestrictions` | `3` (Neko default, kept) | No downloads in v1 |
 | `AllowFileSelectionDialogs` | `false` (Neko default, kept) | No uploads in v1 |
-| `ExtensionInstallBlocklist` | `["*"]` (Neko default, kept) | No extensions |
+| `ExtensionInstallBlocklist` | `["*"]` (Neko default, kept) | No other extensions |
+| `ExtensionInstallForcelist`, `ExtensionInstallAllowlist` | Neko defaults, kept | The only extensions: uBlock Origin Lite and SponsorBlock |
 
 If the allowlist is `["*"]`, the orchestrator omits `URLBlocklist ["*"]` and `URLAllowlist`, and keeps
 only the Neko default blocklist. Spike S5 checks the effect of the policies on subresources, `fetch()`
@@ -794,7 +814,8 @@ gateway failure in the middle of an action.
 4. `desired_state = running`, `ready_at` is null, and `started_at` is more than 120 s ago → error.
 5. `desired_state = running` → `state = starting`. This rule also applies to a pod that fails after it
    was Ready. Rule 4 does not stop such a session, because `ready_at` is set.
-6. `desired_state = stopped` and a pod exists → `state = stopping`.
+6. `desired_state = stopped`, a pod exists, and `state` is not `error` → `state = stopping`. A session
+   in `error` stays in `error`, and `error_reason` does not change.
 7. `desired_state = stopped` and no pod exists → release the media port (section 7.8). If `state` is not
    `error`, set `state = stopped`.
 
@@ -1091,6 +1112,8 @@ system colors.
     The Activity view uses it.
 - The gateway sends an SSE comment line every 25 s on both SSE streams, so proxies do not close an
   idle SSE stream. After a reconnect, the client fetches the session data again.
+- After a rights change, the gateway closes the SSE streams of the user (section 6.5). The reconnect
+  then gives the client the data for the new rights.
 - Accessibility: all controls work with the keyboard. Focus rings are visible. Text contrast meets
   WCAG AA in both themes.
 
@@ -1142,6 +1165,9 @@ The `HelmChartConfig` for the bundled Traefik is in `deploy/traefik/`, in two fi
   - The same entry point timeouts, which do not cut long responses.
   - `externalTrafficPolicy: Local` on the Traefik Service. Without it, Traefik sees an internal address
     instead of the client IP, and the per-IP limits and the audit IPs are wrong.
+  - Fixed node ports on the Traefik Service: `30080` for `web`, `30081` for `websecure`, and `30082`
+    for `healthCheckNodePort`. Without them, Kubernetes gives automatic node ports, and an automatic
+    node port can be a media port (section 11.6).
 
 `check-repo.ts` (section 3.4.7) fails if the timeout values in the two files are not equal. Thus the
 long MCP stream test (section 15.3) on k3d verifies the production timeouts.
@@ -1182,9 +1208,17 @@ The script is idempotent. It does these steps:
    write-kubeconfig-mode: "0600"
    default-local-storage-path: <HYDRA_STATE_DIR>/volumes
    protect-kernel-defaults: true
-   service-node-port-range: 30000-32767,<HYDRA_MEDIA_PORT_RANGE>
+   service-node-port-range: 30000-<last port of HYDRA_MEDIA_PORT_RANGE>
    ```
    The media ports are NodePorts (section 7.3), so the node port range must contain them.
+   kube-apiserver accepts only one range, so the range starts at `30000` and ends at the last media
+   port. With the default `HYDRA_MEDIA_PORT_RANGE`, the range is `30000-52099`.
+   - With this range, Kubernetes keeps the lowest 128 ports (`30000-30127`) for fixed node ports. It
+     gives automatic node ports from the ports above them first, so an automatic node port can take
+     a media port.
+   - Thus each Service with node ports in the cluster must use fixed node ports in `30000-30127`. The
+     only such Service in k3s is Traefik (section 11.3). The media Services use fixed node ports too.
+   - The first port of `HYDRA_MEDIA_PORT_RANGE` must be `30128` or more (section 4).
 6. If `deploy/session/seccomp/chromium.json` exists (spike S1), copy it to
    `/var/lib/kubelet/seccomp/hydra/chromium.json` (the kubelet seccomp folder of k3s).
 7. Download `install.sh` from the k3s release tag in `scripts/versions.sh`, check its SHA-256, and
@@ -1293,6 +1327,8 @@ Format: `{ "error": { "code": "<code>", "message": "<text for people>", "fields"
 | `conflict` | 409 | For example, the email exists |
 | `invalid_state` | 409 | The action does not fit the session state, for example a start during `deleting`, or a live ticket for a session that is not running |
 | `capacity_reached` | 409 | `HYDRA_MAX_RUNNING` sessions hold a media port (section 7.8) |
+| `body_too_large` | 413 | The request body is larger than the body limit |
+| `internal` | 500 | An unexpected error. The message gives no details. The gateway logs the error. |
 
 ---
 
