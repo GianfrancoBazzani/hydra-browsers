@@ -1,81 +1,185 @@
 # Hydra Browsers
 
-Hydra Browsers is an internal tool for a team. A team member starts isolated Chromium browsers
-("sessions") on a remote server from a web dashboard, watches each session live, and controls it
-with mouse and keyboard. External AI agents (Claude Code, Cursor, and other MCP clients) connect to
-a session through MCP and control the same browser.
+![Hydra Browsers](hydra-browsers.jpeg)
 
-- Design spec (source of truth): [`docs/superpowers/specs/2026-10-10-hydra-browsers-design.md`](docs/superpowers/specs/2026-10-10-hydra-browsers-design.md)
-- Rules for all contributors, human or agent: [`AGENTS.md`](AGENTS.md). Read it before you change
-  anything. Frontend changes follow [`STYLE.md`](STYLE.md).
+Hydra Browsers runs isolated Chromium browsers on your own server, and lets humans and AI agents
+use the same browser at the same time.
 
-## Repository
+You start a browser ("session") from a web dashboard. You watch the session live and control it with
+mouse and keyboard. AI agents (Claude Code, Cursor, and other MCP clients) connect to the same
+session through MCP and control the same Chromium tabs.
+
+## Features
+
+- **Isolated sessions.** Each session is a separate Chromium in its own Kubernetes pod, with its own
+  profile volume. Network policies block access from a session to the cluster, to the private
+  network, and to the cloud metadata endpoint.
+- **Persistent profiles.** Cookies, logins, and local storage stay after a stop and a start of the
+  session.
+- **Live view.** You see the browser in real time over WebRTC (Neko), and you control it with mouse and
+  keyboard. The live view uses a separate origin from the dashboard.
+- **MCP for AI agents.** Each session has an MCP endpoint (Streamable HTTP, Playwright MCP). The
+  dashboard gives a `claude mcp add` command and an `mcpServers` JSON config that you can copy.
+
+## How it works
+
+```
+ Browser of a user                       AI agent (Claude Code, Cursor…)
+   │  hydra.example.com       (dashboard, API)   │  POST /s/<sid>/mcp + Bearer hyd_…
+   │  live.hydra.example.com  (live view)        │
+   ▼                                             ▼
+ ┌────────── one server ── k3s, single node ──────────────────────────┐
+ │  Traefik (TLS, Let's Encrypt)                                      │
+ │      ▼                                                             │
+ │  hydra-gateway   dashboard, API, auth, MCP proxy, live proxy,      │
+ │                  orchestrator, SQLite                              │
+ │      ▼                                                             │
+ │  session-<sid>   neko (Chromium + WebRTC)  +  mcp (Playwright MCP) │
+ │                  profile volume                                    │
+ └────────────────────────────────────────────────────────────────────┘
+```
+
+The gateway is the only component that accepts external traffic. It checks each request, writes the
+audit log, and sends the request to the session pod. Only the WebRTC media goes directly to the
+session pod, on one port from a pool.
+
+The stack is TypeScript in a pnpm workspace:
 
 | Path | Contents |
 |---|---|
-| `packages/shared` | `@hydra/shared`: zod schemas, API types, constants (Node.js and browser) |
-| `packages/server` | `@hydra/server`: gateway, orchestrator, proxies, database, CLI |
+| `packages/server` | `@hydra/server`: gateway, orchestrator, proxies, database, `hydra` CLI |
 | `packages/web` | `@hydra/web`: React dashboard |
-| `packages/mcp-sidecar` | `@hydra/mcp-sidecar`: the exact `@playwright/mcp` dependency of the `hydra-mcp` image |
-| `scripts/versions.sh` | Pinned k3s, k3d, and `rancher/k3s` image versions |
-| `scripts/check-repo.ts` | CI check of the pinning policy and of config parity |
-| `.github/workflows/ci.yml` | CI on pull requests |
+| `packages/shared` | `@hydra/shared`: zod schemas, API types, constants |
+| `packages/mcp-sidecar` | `@hydra/mcp-sidecar`: the pinned `@playwright/mcp` of the `hydra-mcp` image |
+| `packages/testsite` | `@hydra/testsite`: the test site of the e2e tests |
+| `packages/e2e` | `@hydra/e2e`: Playwright end-to-end tests on k3d |
+| `deploy/` | Dockerfiles, Kustomize base and overlays, Traefik values |
+| `scripts/` | Host setup, local cluster, pinned versions, repository check |
 
-Spec section 3 gives the full layout, including the parts that later work adds (`deploy/`, the test
-site, and the e2e tests).
+## Connect an AI agent
 
-## Requirements
+1. In the dashboard, start the session.
+2. Open the **Tokens** view of the session and create a token.
+3. Copy the command that the dashboard shows. For Claude Code, the command is:
 
-- **pnpm 10 or newer**, any version. The root `package.json` pins pnpm `12.9.0` in
-  `packageManager`, and pnpm switches to that version by itself (`pmOnFail: download`).
-- **Node.js 24.21.0** in your shell, from `.node-version` (mise, fnm, and nvm read it). pnpm also
-  downloads Node.js 24.21.0 for the scripts of the project (`devEngines.runtime`) and checks the
-  download against the checksum in `pnpm-lock.yaml`. npm refuses to run in this folder with a
-  different Node.js version (`EBADDEVENGINES`).
-- Later, for the local cluster: Docker and the k3d version of `scripts/versions.sh`
-  (see [Install k3d](#install-k3d)).
+   ```sh
+   claude mcp add --transport http <name> https://hydra.example.com/s/<sid>/mcp \
+     --header "Authorization: Bearer hyd_…"
+   ```
 
-## Commands
+4. For other MCP clients, copy the `mcpServers` JSON config from the same view.
+
+The dashboard shows the full token one time only. Keep it in a safe place.
+
+## Production deploy
+
+Hydra Browsers runs on k3s on one Linux server, for example an EC2 instance.
+
+### What you must prepare
+
+The repository does not create the cloud resources. Prepare these items first:
+
+- A Debian or Ubuntu server with a static public IP (for example an Elastic IP). On EC2, require
+  IMDSv2 with hop limit 1.
+- Firewall rules (for example a security group):
+  - TCP 80 and 443 from all addresses.
+  - UDP and TCP on the media port range (default `52000-52099`) from all addresses.
+  - SSH from admin addresses only.
+- Two DNS records to the public IP, for example `hydra.example.com` (dashboard, API, and MCP) and
+  `live.hydra.example.com` (live view). The two hostnames must have the same registrable domain.
+- A persistent volume for the state folder (default `/var/lib/hydra`), with daily snapshots.
+- An alarm when the volume is 80% full.
+
+### Build the images
+
+1. In the GitHub repository settings, let GitHub Actions create pull requests.
+2. Run the `release` workflow from the default branch, or push a `v*` tag.
+3. The workflow builds the four images, pushes them to `ghcr.io`, and opens a pull request with
+   their digests.
+4. Close and reopen that pull request to run CI on it, then merge it.
+
+### Install k3s on the server
+
+1. Clone the repository on the server.
+2. Run the setup script as root:
+
+   ```sh
+   sudo HYDRA_STATE_DIR=/var/lib/hydra HYDRA_MEDIA_PORT_RANGE=52000-52099 ./scripts/setup-k3s.sh
+   ```
+
+The script installs the pinned k3s version and checks the SHA-256 of the k3s installer. It also
+sets kernel parameters, turns on security updates, and configures Traefik with Let's Encrypt. You can
+run it again safely, for example after a k3s update.
+
+If you use a media port range that is not the default, also change the range in the `prod` overlay
+and in the firewall. The comments in `scripts/setup-k3s.sh` give the details.
+
+### Deploy the gateway
+
+1. Create the namespaces and the root key. Keep a copy of the key in a secret store:
+
+   ```sh
+   kubectl apply -f deploy/k8s/base/namespaces.yaml
+   kubectl -n hydra create secret generic hydra-secret-key \
+     --from-literal=HYDRA_SECRET_KEY="$(openssl rand -base64 32)"
+   ```
+
+2. In `deploy/k8s/overlays/prod/kustomization.yaml`, set these values:
+   - The two hostnames, in `hydra-config` and in the `Host()` rules of the two IngressRoutes.
+   - The public IP (`HYDRA_PUBLIC_IP`).
+   - The private IP of the server, in the `gateway-egress-apiserver` NetworkPolicy.
+3. If the images on `ghcr.io` are private, give k3s a read token in
+   `/etc/rancher/k3s/registries.yaml`.
+4. Apply the overlay:
+
+   ```sh
+   kubectl apply -k deploy/k8s/overlays/prod
+   kubectl -n hydra rollout status deploy/hydra-gateway
+   ```
+
+5. Create the first admin:
+
+   ```sh
+   kubectl exec -it -n hydra deploy/hydra-gateway -- hydra user create --admin --email <email>
+   ```
+
+6. Open `https://hydra.example.com` and log in.
+
+### Update
+
+1. Run the `release` workflow and merge its pull request.
+2. Pull the new commit on the server.
+3. Run `kubectl apply -k deploy/k8s/overlays/prod`.
+
+At start, the gateway makes a backup of the database and then runs the migrations. If a migration
+fails, the gateway stops and does not serve requests.
+
+### `hydra` CLI
+
+The gateway image contains the `hydra` CLI. Run it with
+`kubectl exec -it -n hydra deploy/hydra-gateway -- hydra <command>`.
 
 | Command | Use |
 |---|---|
-| `pnpm install` | Install the dependencies |
-| `pnpm test` | All unit and integration tests (Vitest projects) |
-| `pnpm --filter @hydra/server test` | The tests of one package |
-| `pnpm lint` | ESLint and `prettier --check` |
-| `pnpm typecheck` | `tsc` for the root scripts and for each package |
-| `pnpm build` | Build all packages |
-| `node scripts/check-repo.ts` | Pinning and config-parity check (spec section 3.4.7) |
-| `pnpm dev` | Gateway and dashboard on the host, with the k3d cluster of `scripts/dev-cluster.sh` (spec section 11.7). Dashboard: `http://hydra.localhost:5173` |
-| `pnpm e2e` | End-to-end tests on k3d (spec section 15.3) |
+| `hydra user create --email <email> [--admin] [--name <name>]` | Create a user |
+| `hydra user reset-password --email <email>` | Set a new password for a user |
+| `hydra db backup` | Make a backup of the database |
+| `hydra keygen` | Print a new root key |
 
-Tests use the TypeScript source of the workspace packages (export condition `@hydra/source`).
-Production code uses the `dist/` output of `pnpm build`.
+## Local development
 
-## Reproduce the build on another system
+Local development uses a k3d cluster (k3s in Docker) for the session pods. The gateway and the
+dashboard run on your computer with hot reload.
 
-One commit gives the same toolchain, dependency tree, images, and cluster software on each system
-(spec section 3.4).
+### Requirements
 
-1. Check out the commit.
-2. Install pnpm 10 or newer, for example `npm install -g pnpm@12.9.0`. In this folder, pnpm switches
-   to the pnpm version of `packageManager`. `pnpm-lock.yaml` records the integrity of that pnpm
-   version.
-3. Use Node.js 24.21.0 (`.node-version`).
-4. Run `pnpm install --frozen-lockfile`. pnpm installs the exact dependency tree of
-   `pnpm-lock.yaml` and fails if a `package.json` does not match the lockfile. It checks each package
-   against its integrity hash, checks the lockfile again against `minimumReleaseAge` and
-   `trustPolicy`, and runs install scripts only for the `allowBuilds` entries that are `true`.
-5. Run `node scripts/check-repo.ts`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-   These are the CI jobs (`.github/workflows/ci.yml`, runner `ubuntu-24.04`).
-6. Cluster software comes from `scripts/versions.sh`: the k3s version, the `rancher/k3s` image with
-   its digest, and the k3d version. `scripts/setup-k3s.sh` holds the SHA-256 of the k3s
-   `install.sh`. Container images always have a tag and a digest.
+- **Node.js 24.21.0**, from `.node-version` (mise, fnm, and nvm read it).
+- **pnpm 10 or newer.** pnpm switches to the pinned version of `packageManager` by itself.
+- **Docker**, **kubectl**, **curl**, **git**, and **openssl**.
+- **k3d**, the version of `K3D_VERSION` in `scripts/versions.sh`.
 
-### Install k3d
-
-Download the k3d binary of `K3D_VERSION` and check it against the `checksums.txt` of the same
-release. Example for macOS on Apple silicon (for Linux, use `k3d-linux-amd64`). Run it from the repository root.
+To install k3d, download the binary and check it against the checksums of the release. This example
+is for macOS on Apple silicon. For Linux, use `k3d-linux-amd64`. Run it from the repository root:
 
 ```sh
 . scripts/versions.sh
@@ -86,61 +190,66 @@ chmod +x k3d-darwin-arm64 && sudo mv k3d-darwin-arm64 /usr/local/bin/k3d && rm k
 k3d version
 ```
 
-### Local cluster on Docker Desktop for macOS
+### Start
 
-`scripts/dev-cluster.sh` publishes the WebRTC media ports on `127.0.0.1` (the plan 08 default). Docker
-Desktop for macOS does not forward UDP that is published on `127.0.0.1`, so the live view shows no
-video. Create the cluster with `HYDRA_MEDIA_BIND_ADDRESS=0.0.0.0 ./scripts/dev-cluster.sh`: this
-opens the media ports on all interfaces of the Mac. It only applies to a new cluster (run
-`k3d cluster delete hydra-dev` first). On Linux and in CI, leave it unset. The same holds for the
-load balancer idle timeout (1 h instead of the k3d default of 600 s, needed by the 10 min MCP stream
-test): an existing cluster must be deleted and created again.
+1. Install the dependencies:
 
-## Dependency rules
+   ```sh
+   pnpm install
+   ```
 
-Spec section 3.4 is the full policy. In short:
+2. Create the local cluster. The script builds the images, pushes them to a local registry, and
+   deploys the `dev` overlay:
 
-- **Exact versions only.** No ranges in a `package.json` (only `workspace:*` for internal packages),
-  a tag and a digest for each image, a full commit SHA for each GitHub Action. `check-repo.ts`
-  enforces these rules in CI.
-- **7-day minimum release age.** pnpm refuses a version younger than 7 days
-  (`minimumReleaseAge: 10080`), also in an existing lockfile. Add a dependency with an exact
-  version, for example `pnpm --filter @hydra/server add <name>@<version>`.
-- **Install scripts.** When a new dependency has an install script, `pnpm install` stops with
-  `ERR_PNPM_IGNORED_BUILDS`. Read the script, then add an `allowBuilds` entry to
-  `pnpm-workspace.yaml` with a comment that gives the reason: `true` only if the package needs the
-  script, else `false`.
-- **Urgent security fix younger than 7 days:** add the exact version to `minimumReleaseAgeExclude`
-  with a comment that gives the date, the reason, and the advisory ID.
-  `minimumReleaseAgeExcludePrune` removes the entry when the lockfile no longer uses that version.
-- **Trust policy exception:** add the exact version to `trustPolicyExclude` with a reason comment.
-- **`overrides`:** exact versions only, each with a reason comment.
-- **Updates:** Renovate opens the update pull requests (`renovate.json`). Each one must pass all
-  CI jobs. Before you change the Neko, Playwright MCP, or k3s version, read the release notes.
+   ```sh
+   ./scripts/dev-cluster.sh
+   ```
 
-### Update k3s
+   On Docker Desktop for macOS, use `HYDRA_MEDIA_BIND_ADDRESS=0.0.0.0 ./scripts/dev-cluster.sh`.
+   Docker Desktop does not forward UDP on `127.0.0.1`, and without this value the live view shows no
+   video.
 
-A k3s update changes `K3S_VERSION` and `K3S_IMAGE` in `scripts/versions.sh`, and the `install.sh`
-values `K3S_INSTALL_SH_VERSION` and `K3S_INSTALL_SH_SHA256` in `scripts/setup-k3s.sh`. Renovate
-updates `K3S_VERSION` and `K3S_IMAGE` in one pull request. A person reads the new `install.sh` and
-updates its version and SHA-256. Until then, `setup-k3s.sh` stops before it runs `install.sh`.
+3. Start the gateway and the dashboard on your computer:
+
+   ```sh
+   pnpm dev
+   ```
+
+4. In a second terminal, create an admin in the database of the local gateway:
+
+   ```sh
+   bash scripts/dev-cluster.sh dev pnpm --filter @hydra/server run hydra user create --admin --email <email>
+   ```
+
+5. Open `http://hydra.localhost:5173` and log in.
+
+`pnpm dev` stops the gateway in the cluster and runs the gateway on your computer. To start the
+gateway in the cluster again, stop `pnpm dev` and run `./scripts/dev-cluster.sh`. That gateway is at
+`http://hydra.localhost`.
+
+To remove the cluster and the registry:
 
 ```sh
-# 1. The SHA-256 of install.sh of the new release tag (K3S_VERSION, for example v1.36.5+k3s1):
-curl -fsSL "https://raw.githubusercontent.com/k3s-io/k3s/v1.36.5+k3s1/install.sh" | shasum -a 256
-
-# 2. The digest of the multi-arch image (the tag uses "-" instead of "+"):
-TOKEN=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:rancher/k3s:pull" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-curl -fsSI -H "Authorization: Bearer $TOKEN" \
-  -H "Accept: application/vnd.oci.image.index.v1+json" \
-  -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
-  "https://registry-1.docker.io/v2/rancher/k3s/manifests/v1.36.5-k3s1" | grep -i docker-content-digest
+k3d cluster delete hydra-dev && k3d registry delete k3d-hydra-registry
 ```
 
-## Credits
+### Commands
 
-The visual style of the dashboard follows [ridvanonal/macos-react](https://github.com/ridvanonal/macos-react).
-Its README says MIT, but the repository has no LICENSE file. Thus Hydra Browsers copies no code from
-it: our components are our own and use the same design values. Most of the color values are the
-public Apple system colors.
+| Command | Use |
+|---|---|
+| `pnpm test` | All unit and integration tests (Vitest) |
+| `pnpm --filter @hydra/server test` | The tests of one package |
+| `pnpm lint` | ESLint and `prettier --check` |
+| `pnpm typecheck` | `tsc` for the root scripts and for each package |
+| `pnpm build` | Build all packages |
+| `pnpm e2e` | End-to-end tests on the k3d cluster |
+| `node scripts/check-repo.ts` | Check the pinning rules and the config parity |
+
+## Contributing
+
+- The design spec is the source of truth:
+  [`docs/superpowers/specs/2026-10-10-hydra-browsers-design.md`](docs/superpowers/specs/2026-10-10-hydra-browsers-design.md).
+- Read [`AGENTS.md`](AGENTS.md) before you change the code. These rules apply to humans and to agents.
+- Frontend changes follow [`STYLE.md`](STYLE.md).
+- Spec section 3.4 gives the dependency rules. Add a dependency with an exact version, for example
+  `pnpm --filter @hydra/server add <name>@<version>`.
