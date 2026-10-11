@@ -1,0 +1,33 @@
+# Values for the Traefik chart that k3s bundles (spec section 11.3). dev-cluster.sh applies this
+# file. No ACME and no HTTP to HTTPS redirect: k3d serves http://hydra.localhost.
+#
+# Keep the respondingTimeouts blocks equal to deploy/traefik/prod.yaml (scripts/check-repo.ts
+# checks it), so the long MCP stream test on k3d verifies the production timeouts.
+#
+# Fixed node ports (spec sections 11.3 and 11.6): equal to prod.yaml, below 30128.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        nodePort: 30080
+        transport:
+          respondingTimeouts:
+            readTimeout: "0s"
+            writeTimeout: "0s"
+            idleTimeout: "180s"
+      websecure:
+        nodePort: 30081
+        transport:
+          respondingTimeouts:
+            readTimeout: "0s"
+            writeTimeout: "0s"
+            idleTimeout: "180s"
+    service:
+      spec:
+        externalTrafficPolicy: Local
+        healthCheckNodePort: 30082

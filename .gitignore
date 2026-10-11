@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.vitest/
+.data/
+.DS_Store
+.env
+.env.*
+# Written by scripts/dev-cluster.sh (spec sections 3.4.4, 11.7): image digests, node IP, kubeconfig
+deploy/k8s/overlays/dev/generated/

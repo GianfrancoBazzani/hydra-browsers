@@ -1,0 +1,12 @@
+# Kustomize base (spec section 11.2). Apply an overlay, not the base:
+# kubectl apply -k deploy/k8s/overlays/prod (or overlays/dev).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml
+  - storageclasses.yaml
+  - rbac.yaml
+  - gateway.yaml
+  - networkpolicies.yaml
+  - ingressroutes.yaml
+  - prepull.yaml

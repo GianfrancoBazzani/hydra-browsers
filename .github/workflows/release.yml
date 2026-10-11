@@ -1,0 +1,177 @@
+# Release (spec section 3.4.4): build and push the four images from one commit, tagged with the
+# commit SHA, then open a pull request that writes their digests to the prod overlay.
+#
+# Repository settings: allow GitHub Actions to create pull requests. GitHub starts no workflows for
+# a pull request that GITHUB_TOKEN opens, so close and reopen the pull request to run CI on it.
+# Images are linux/amd64 (x86_64 EC2 instance types).
+#
+# A run from a branch other than the default branch builds and pushes the four images (the images
+# job runs for any ref), but the overlay job does not run and opens no pull request: the images of
+# unmerged branch code must not reach the prod overlay. The pull request names the source ref.
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: Build and push the images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      registry: ${{ steps.registry.outputs.name }}
+      gateway: ${{ steps.gateway.outputs.digest }}
+      session: ${{ steps.session.outputs.digest }}
+      mcp: ${{ steps.mcp.outputs.digest }}
+      testsite: ${{ steps.testsite.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: registry
+        name: Registry name (GHCR needs a lowercase owner)
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: gateway
+        name: hydra-gateway
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.registry.outputs.name }}/hydra-gateway:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - id: session
+        name: hydra-session
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/session/Dockerfile.session
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.registry.outputs.name }}/hydra-session:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - id: mcp
+        name: hydra-mcp
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/session/Dockerfile.mcp
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.registry.outputs.name }}/hydra-mcp:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - id: testsite
+        name: hydra-testsite
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/testsite/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.registry.outputs.name }}/hydra-testsite:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  overlay:
+    name: Open the prod overlay pull request
+    if: github.ref_type == 'tag' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      BRANCH: release/images-${{ github.sha }}
+      COMMIT: ${{ github.sha }}
+      SOURCE_REF: ${{ github.ref }}
+      REGISTRY: ${{ needs.images.outputs.registry }}
+      GATEWAY_DIGEST: ${{ needs.images.outputs.gateway }}
+      SESSION_DIGEST: ${{ needs.images.outputs.session }}
+      MCP_DIGEST: ${{ needs.images.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      # A tag can point to a commit that is not on the default branch. Its digests must not reach
+      # the prod overlay of the default branch.
+      - name: Refuse a commit that is not on the default branch
+        run: |
+          git merge-base --is-ancestor "$COMMIT" HEAD || {
+            echo "::error::Commit $COMMIT is not on the default branch $BASE_BRANCH: not writing its image digests to the prod overlay."
+            exit 1
+          }
+
+      - name: Write the image digests to the prod overlay
+        run: |
+          bash deploy/k8s/write-overlay-component.sh \
+            --out deploy/k8s/overlays/prod/images/kustomization.yaml \
+            --registry "$REGISTRY" --tag "$COMMIT" \
+            --image "hydra-gateway=$GATEWAY_DIGEST" \
+            --image "hydra-session=$SESSION_DIGEST" \
+            --image "hydra-mcp=$MCP_DIGEST" \
+            --source "release workflow, commit $COMMIT"
+          kubectl kustomize deploy/k8s/overlays/prod > /dev/null
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "The prod overlay already has the digests of $COMMIT."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
+          git add deploy/k8s/overlays/prod/images/kustomization.yaml
+          git commit -m "Release images ${COMMIT:0:12}"
+          git push --force origin "$BRANCH"
+          open_prs="$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')"
+          if [[ "$open_prs" != 0 ]]; then
+            echo "The open pull request for $BRANCH exists."
+            exit 0
+          fi
+          gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
+            --title "Release images ${COMMIT:0:12}" \
+            --body "Writes the digests of the images built from commit $COMMIT (source ref $SOURCE_REF) to the prod overlay (spec section 3.4.4). After the merge, deploy with: kubectl apply -k deploy/k8s/overlays/prod"

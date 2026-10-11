@@ -1,0 +1,32 @@
+{
+  "name": "hydra-browsers",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.9.0",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.21.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "bash scripts/dev-cluster.sh dev",
+    "test": "vitest run",
+    "lint": "eslint . && prettier --check .",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r run typecheck",
+    "e2e": "pnpm --filter @hydra/e2e --fail-if-no-match run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "eslint": "10.12.0",
+    "prettier": "3.9.9",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
+  }
+}

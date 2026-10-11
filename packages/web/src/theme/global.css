@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply font-sans text-os-base text-os-foreground antialiased;
+    min-width: 1024px;
+    background-image: var(--os-wallpaper);
+    background-attachment: fixed;
+  }
+
+  #root {
+    position: relative;
+  }
+}
+
+/* Focus ring of STYLE.md section 3. Not in a layer, so no utility can remove it. */
+:focus-visible {
+  outline: 2px solid var(--os-accent);
+  outline-offset: 2px;
+}
+
+/* Reduced motion (STYLE.md rule 6 and section 2.7): only opacity transitions. Not in a layer, and
+   !important, so that it wins over the transition utilities of the components. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-property: opacity !important;
+  }
+}

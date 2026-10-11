@@ -1,0 +1,125 @@
+# The gateway (spec sections 5.1, 11.2): one replica, Recreate (SQLite has one writer).
+# The overlays generate the ConfigMaps hydra-config (URLs, public IP) and hydra-images (session and
+# MCP images, spec section 3.4.4). The operator creates the Secret hydra-secret-key.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway-data
+  namespace: hydra
+  labels:
+    app: hydra-gateway
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: hydra-retain
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hydra-gateway
+  namespace: hydra
+  labels:
+    app: hydra-gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hydra-gateway
+  template:
+    metadata:
+      labels:
+        app: hydra-gateway
+    spec:
+      serviceAccountName: hydra-gateway
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: hydra-gateway
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HYDRA_DATA_DIR
+              value: /data
+            - name: HYDRA_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hydra-secret-key
+                  key: HYDRA_SECRET_KEY
+          envFrom:
+            - configMapRef:
+                name: hydra-config
+            - configMapRef:
+                name: hydra-images
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          # The start makes a backup and runs the migrations (spec section 11.8).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gateway-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hydra-gateway
+  namespace: hydra
+  labels:
+    app: hydra-gateway
+spec:
+  selector:
+    app: hydra-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

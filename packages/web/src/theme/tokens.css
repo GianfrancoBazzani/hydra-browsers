@@ -1,0 +1,226 @@
+/*
+ * Design tokens of STYLE.md section 2. Light values in :root, dark values in the
+ * prefers-color-scheme block. contrast.test.ts and tokens.test.ts read this file.
+ * Add a token here only together with STYLE.md (AGENTS.md rule 3).
+ */
+:root {
+  color-scheme: light dark;
+
+  --os-red: #ff3b30;
+  --os-red-accessible: #d70015;
+  --os-orange: #ff9500;
+  --os-orange-accessible: #c93400;
+  --os-yellow: #ffcc00;
+  --os-yellow-accessible: #b25000;
+  --os-green: #34c759;
+  --os-green-accessible: #217f38;
+  --os-mint: #00c7be;
+  --os-mint-accessible: #0c7c76;
+  --os-teal: #30b0c7;
+  --os-teal-accessible: #00788d;
+  --os-cyan: #32ade6;
+  --os-cyan-accessible: #0071a4;
+  --os-blue: #007aff;
+  --os-blue-accessible: #0040dd;
+  --os-indigo: #5856d6;
+  --os-indigo-accessible: #3634a3;
+  --os-purple: #af52de;
+  --os-purple-accessible: #8944ab;
+  --os-pink: #ff2d55;
+  --os-pink-accessible: #d30f45;
+  --os-brown: #a2845e;
+  --os-brown-accessible: #7f6545;
+  --os-gray: #8e8e93;
+  --os-gray-accessible: #6c6c70;
+
+  --os-surface: #ffffff;
+  --os-foreground: #1d1d1f;
+  --os-tone: rgb(0 0 0 / 5%);
+  --os-tone-strong: rgb(0 0 0 / 10%);
+  --os-black: #000000;
+  --os-gray-1: #8e8e93;
+  --os-gray-2: #aeaeb2;
+  --os-gray-3: #c7c7cc;
+  --os-gray-4: #d1d1d6;
+  --os-gray-5: #e5e5ea;
+  --os-gray-6: #f2f2f7;
+  --os-accent: #007aff;
+  --os-accent-fill: #0062d6;
+  --os-danger-fill: #d70015;
+  --os-accent-fill-hover: color-mix(in oklab, var(--os-accent-fill) 92%, var(--os-black));
+  --os-danger-fill-hover: color-mix(in oklab, var(--os-danger-fill) 92%, var(--os-black));
+  --os-on-fill: #ffffff;
+  --os-separator: rgb(0 0 0 / 10%);
+  --os-overlay: rgb(0 0 0 / 20%);
+  --os-segment-selected: #ffffff;
+
+  --os-wallpaper: linear-gradient(135deg, #dce6f5 0%, #f1e4ec 100%);
+  --os-traffic-red: #ff5f57;
+  --os-traffic-red-border: #e2463f;
+  --os-traffic-yellow: #febc2e;
+  --os-traffic-yellow-border: #e1a116;
+  --os-traffic-green: #28c840;
+  --os-traffic-green-border: #14ae29;
+
+  --os-font-sans: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  --os-font-mono: ui-monospace, Menlo, Consolas, monospace;
+  --os-text-xs: 11px;
+  --os-text-sm: 12px;
+  --os-text-base: 13px;
+  --os-text-lg: 15px;
+  --os-text-xl: 20px;
+
+  --os-radius-window: 12px;
+  --os-radius-menu: 8px;
+  --os-radius-control: 6px;
+  --os-radius-checkbox: 4px;
+  --os-shadow-window:
+    0 0 0 1px rgb(0 0 0 / 8%), 0 24px 64px -8px rgb(0 0 0 / 28%),
+    inset 0 1px 0 0 rgb(255 255 255 / 60%);
+  --os-shadow-menu: 0 0 0 1px rgb(0 0 0 / 8%), 0 8px 24px rgb(0 0 0 / 16%);
+  --os-shadow-control: 0 0 0 0.5px rgb(0 0 0 / 8%), 0 1px 2px rgb(0 0 0 / 15%);
+
+  --os-duration-fast: 120ms;
+  --os-duration-base: 200ms;
+  --os-duration-out: 150ms;
+  --os-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --os-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --os-z-overlay: 40;
+  --os-z-sheet: 50;
+  --os-z-menu: 60;
+
+  --os-window-inset: 24px;
+  --os-sidebar-width: 240px;
+  --os-toolbar-height: 52px;
+  --os-control-height: 28px;
+  --os-control-height-sm: 24px;
+  --os-row-height: 28px;
+  --os-table-row-height: 32px;
+  --os-statusbar-height: 28px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --os-red: #ff453a;
+    --os-red-accessible: #ff6961;
+    --os-orange: #ff9f0a;
+    --os-orange-accessible: #ffb340;
+    --os-yellow: #ffd60a;
+    --os-yellow-accessible: #ffd426;
+    --os-green: #30d158;
+    --os-green-accessible: #30db5b;
+    --os-mint: #63e6e2;
+    --os-mint-accessible: #66d4cf;
+    --os-teal: #40c8e0;
+    --os-teal-accessible: #5de6ff;
+    --os-cyan: #64d2ff;
+    --os-cyan-accessible: #70d7ff;
+    --os-blue: #0a84ff;
+    --os-blue-accessible: #409cff;
+    --os-indigo: #5e5ce6;
+    --os-indigo-accessible: #7d7aff;
+    --os-purple: #bf5af2;
+    --os-purple-accessible: #da8fff;
+    --os-pink: #ff375f;
+    --os-pink-accessible: #ff6482;
+    --os-brown: #ac8e68;
+    --os-brown-accessible: #b59469;
+    --os-gray: #8e8e93;
+    --os-gray-accessible: #aeaeb2;
+
+    --os-surface: #1e1e1e;
+    --os-foreground: #f5f5f7;
+    --os-tone: rgb(255 255 255 / 8%);
+    --os-tone-strong: rgb(255 255 255 / 14%);
+    --os-gray-2: #636366;
+    --os-gray-3: #48484a;
+    --os-gray-4: #3a3a3c;
+    --os-gray-5: #2c2c2e;
+    --os-gray-6: #1c1c1e;
+    --os-accent: #0a84ff;
+    --os-separator: rgb(255 255 255 / 12%);
+    --os-overlay: rgb(0 0 0 / 40%);
+    --os-segment-selected: #636366;
+
+    --os-wallpaper: linear-gradient(135deg, #1a2233 0%, #2b1f30 100%);
+
+    --os-shadow-window:
+      0 0 0 1px rgb(0 0 0 / 60%), 0 24px 64px -8px rgb(0 0 0 / 60%),
+      inset 0 1px 0 0 rgb(255 255 255 / 10%);
+    --os-shadow-menu: 0 0 0 1px rgb(255 255 255 / 10%), 0 8px 24px rgb(0 0 0 / 50%);
+    --os-shadow-control: 0 1px 2px rgb(0 0 0 / 40%);
+  }
+}
+
+@theme inline {
+  /* No default colors, text sizes, or shadows: only the tokens below exist (STYLE.md rule 1). */
+  --color-*: initial;
+  --text-*: initial;
+  --shadow-*: initial;
+  --color-os-surface: var(--os-surface);
+  --color-os-foreground: var(--os-foreground);
+  --color-os-tone: var(--os-tone);
+  --color-os-tone-strong: var(--os-tone-strong);
+  --color-os-black: var(--os-black);
+  --color-os-gray-1: var(--os-gray-1);
+  --color-os-gray-2: var(--os-gray-2);
+  --color-os-gray-3: var(--os-gray-3);
+  --color-os-gray-4: var(--os-gray-4);
+  --color-os-gray-5: var(--os-gray-5);
+  --color-os-gray-6: var(--os-gray-6);
+  --color-os-accent: var(--os-accent);
+  --color-os-accent-fill: var(--os-accent-fill);
+  --color-os-danger-fill: var(--os-danger-fill);
+  --color-os-accent-fill-hover: var(--os-accent-fill-hover);
+  --color-os-danger-fill-hover: var(--os-danger-fill-hover);
+  --color-os-on-fill: var(--os-on-fill);
+  --color-os-separator: var(--os-separator);
+  --color-os-overlay: var(--os-overlay);
+  --color-os-segment-selected: var(--os-segment-selected);
+  --color-os-red: var(--os-red);
+  --color-os-red-accessible: var(--os-red-accessible);
+  --color-os-orange: var(--os-orange);
+  --color-os-orange-accessible: var(--os-orange-accessible);
+  --color-os-yellow: var(--os-yellow);
+  --color-os-yellow-accessible: var(--os-yellow-accessible);
+  --color-os-green: var(--os-green);
+  --color-os-green-accessible: var(--os-green-accessible);
+  --color-os-mint: var(--os-mint);
+  --color-os-mint-accessible: var(--os-mint-accessible);
+  --color-os-teal: var(--os-teal);
+  --color-os-teal-accessible: var(--os-teal-accessible);
+  --color-os-cyan: var(--os-cyan);
+  --color-os-cyan-accessible: var(--os-cyan-accessible);
+  --color-os-blue: var(--os-blue);
+  --color-os-blue-accessible: var(--os-blue-accessible);
+  --color-os-indigo: var(--os-indigo);
+  --color-os-indigo-accessible: var(--os-indigo-accessible);
+  --color-os-purple: var(--os-purple);
+  --color-os-purple-accessible: var(--os-purple-accessible);
+  --color-os-pink: var(--os-pink);
+  --color-os-pink-accessible: var(--os-pink-accessible);
+  --color-os-brown: var(--os-brown);
+  --color-os-brown-accessible: var(--os-brown-accessible);
+  --color-os-gray: var(--os-gray);
+  --color-os-gray-accessible: var(--os-gray-accessible);
+  --font-sans: var(--os-font-sans);
+  --font-mono: var(--os-font-mono);
+  --text-os-xs: 11px;
+  --text-os-xs--line-height: 14px;
+  --text-os-sm: 12px;
+  --text-os-sm--line-height: 16px;
+  --text-os-base: 13px;
+  --text-os-base--line-height: 18px;
+  --text-os-lg: 15px;
+  --text-os-lg--line-height: 20px;
+  --text-os-xl: 20px;
+  --text-os-xl--line-height: 25px;
+  --radius-os-menu: var(--os-radius-menu);
+  --radius-os-control: var(--os-radius-control);
+  --radius-os-checkbox: var(--os-radius-checkbox);
+  --shadow-os-window: var(--os-shadow-window);
+  --shadow-os-menu: var(--os-shadow-menu);
+  --shadow-os-control: var(--os-shadow-control);
+  --ease-os-out: var(--os-ease-out);
+  --ease-os-in: var(--os-ease-in);
+}

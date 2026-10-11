@@ -1,0 +1,180 @@
+# NetworkPolicies (spec section 11.4). Spike S6 and the security e2e tests verify them.
+# The media port range below is the default HYDRA_MEDIA_PORT_RANGE (52000-52099). If you change
+# HYDRA_MEDIA_PORT_RANGE, patch sessions-ingress-media in the overlay.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: hydra-sessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sessions-ingress-gateway
+  namespace: hydra-sessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hydra
+          podSelector:
+            matchLabels:
+              app: hydra-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8931
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sessions-ingress-media
+  namespace: hydra-sessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: UDP
+          port: 52000
+          endPort: 52099
+        - protocol: TCP
+          port: 52000
+          endPort: 52099
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sessions-egress
+  namespace: hydra-sessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The excluded ranges contain the pod CIDR, the service CIDR, the VPC addresses (node IP, API
+    # server on 6443, kubelet on 10250), and the EC2 metadata endpoint.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: hydra
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-ingress-traefik
+  namespace: hydra
+spec:
+  podSelector:
+    matchLabels:
+      app: hydra-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-egress
+  namespace: hydra
+spec:
+  podSelector:
+    matchLabels:
+      app: hydra-gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hydra-sessions
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8931
+---
+# The API server: TCP 6443 on the node IP. Each overlay replaces the address below
+# (192.0.2.1 is a documentation address that matches nothing).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-egress-apiserver
+  namespace: hydra
+spec:
+  podSelector:
+    matchLabels:
+      app: hydra-gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.1/32
+      ports:
+        - protocol: TCP
+          port: 6443

@@ -1,0 +1,6 @@
+# Written by pnpm
+pnpm-lock.yaml
+# Keeps the text of spec section 3.4.3; pnpm also writes to this file
+pnpm-workspace.yaml
+# Markdown is written by hand (the spec and the plans are not reformatted)
+*.md

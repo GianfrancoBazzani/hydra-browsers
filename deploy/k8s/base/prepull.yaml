@@ -1,0 +1,76 @@
+# Image pre-pull (spec section 11.2): the node has the session images before the first Start, so
+# the first start can meet the 60 s goal. The init containers use the hydra-session and hydra-mcp
+# images and run `true`. This DaemonSet has no app.kubernetes.io/managed-by: hydra label, so the
+# reconciler does not treat it as a session object.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: session-image-prepull
+  namespace: hydra-sessions
+  labels:
+    app: session-image-prepull
+spec:
+  selector:
+    matchLabels:
+      app: session-image-prepull
+  template:
+    metadata:
+      labels:
+        app: session-image-prepull
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: session-image
+          image: hydra-session
+          command:
+            - 'true'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+        - name: mcp-image
+          image: hydra-mcp
+          command:
+            - 'true'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10.2@sha256:f548e0e8e3dc1896ca956272154dde3314e8cc4fde0a57577ee9fa1c63f5baf4
+          resources:
+            requests:
+              cpu: 1m
+              memory: 8Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

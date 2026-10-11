@@ -1,0 +1,476 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildSessionObjects > matches the snapshot 1`] = `
+[
+  {
+    "apiVersion": "v1",
+    "kind": "PersistentVolumeClaim",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "profile-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+    "spec": {
+      "accessModes": [
+        "ReadWriteOnce",
+      ],
+      "resources": {
+        "requests": {
+          "storage": "5Gi",
+        },
+      },
+      "storageClassName": "hydra-profile",
+    },
+  },
+  {
+    "apiVersion": "v1",
+    "data": {
+      "admin-password": "MUNBcTVPMXJ4QmRZa3JXdTRTR1p3WHg5NVFmc3R4bHZBSEZoV0ZSeEhzbw==",
+      "user-password": "OGpqNzdia0lXakxSaTI5OVZEdXZrTl85WElteU8xV0x5R2hMNi1hN2dkUQ==",
+    },
+    "kind": "Secret",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "neko-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+    "type": "Opaque",
+  },
+  {
+    "apiVersion": "v1",
+    "data": {
+      "hydra-flags": "export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --remote-debugging-port=9222 --lang=en-US --accept-lang=en-US,en"
+",
+      "policies.json": "{
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BrowserSignin": 0,
+  "DefaultNotificationsSetting": 2,
+  "DeveloperToolsAvailability": 1,
+  "EditBookmarksEnabled": false,
+  "FullscreenAllowed": true,
+  "IncognitoModeAvailability": 1,
+  "SyncDisabled": true,
+  "AutoplayAllowed": true,
+  "BrowserAddPersonEnabled": false,
+  "BrowserGuestModeEnabled": false,
+  "DefaultPopupsSetting": 2,
+  "DownloadRestrictions": 3,
+  "VideoCaptureAllowed": true,
+  "AllowFileSelectionDialogs": false,
+  "PromptForDownloadLocation": false,
+  "BookmarkBarEnabled": false,
+  "PasswordManagerEnabled": false,
+  "BrowserLabsEnabled": false,
+  "CommandLineFlagSecurityWarningsEnabled": false,
+  "URLAllowlist": [
+    "example.com",
+    "about:blank"
+  ],
+  "URLBlocklist": [
+    "*"
+  ],
+  "ExtensionInstallForcelist": [
+    "ddkjiahejlhfcafbddmgiahcphecmpfh;https://clients2.google.com/service/update2/crx",
+    "mnjggcdmjocbbbhaepdhchncahnbgone;https://clients2.google.com/service/update2/crx"
+  ],
+  "ExtensionInstallAllowlist": [
+    "ddkjiahejlhfcafbddmgiahcphecmpfh",
+    "mnjggcdmjocbbbhaepdhchncahnbgone"
+  ],
+  "ExtensionInstallBlocklist": [
+    "*"
+  ],
+  "DefaultCookiesSetting": 1,
+  "RestoreOnStartup": 1,
+  "DiskCacheSize": 536870912
+}
+",
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "chromium-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "session-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+    "spec": {
+      "clusterIP": "None",
+      "ports": [
+        {
+          "name": "neko",
+          "port": 8080,
+          "protocol": "TCP",
+          "targetPort": 8080,
+        },
+        {
+          "name": "mcp",
+          "port": 8931,
+          "protocol": "TCP",
+          "targetPort": 8931,
+        },
+      ],
+      "selector": {
+        "hydra/session-id": "abcdefghij23",
+      },
+    },
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "media-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+    "spec": {
+      "externalTrafficPolicy": "Local",
+      "ports": [
+        {
+          "name": "media-udp",
+          "nodePort": 52000,
+          "port": 52000,
+          "protocol": "UDP",
+          "targetPort": 52000,
+        },
+        {
+          "name": "media-tcp",
+          "nodePort": 52000,
+          "port": 52000,
+          "protocol": "TCP",
+          "targetPort": 52000,
+        },
+      ],
+      "selector": {
+        "hydra/session-id": "abcdefghij23",
+      },
+      "type": "NodePort",
+    },
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "StatefulSet",
+    "metadata": {
+      "labels": {
+        "app.kubernetes.io/managed-by": "hydra",
+        "hydra/session-id": "abcdefghij23",
+      },
+      "name": "session-abcdefghij23",
+      "namespace": "hydra-sessions",
+    },
+    "spec": {
+      "podManagementPolicy": "Parallel",
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "hydra/session-id": "abcdefghij23",
+        },
+      },
+      "serviceName": "session-abcdefghij23",
+      "template": {
+        "metadata": {
+          "annotations": {
+            "hydra/started-at": "1791633600000",
+          },
+          "labels": {
+            "app.kubernetes.io/managed-by": "hydra",
+            "hydra/session-id": "abcdefghij23",
+          },
+        },
+        "spec": {
+          "automountServiceAccountToken": false,
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "NEKO_DESKTOP_SCREEN",
+                  "value": "1920x1080@25",
+                },
+                {
+                  "name": "NEKO_WEBRTC_UDPMUX",
+                  "value": "52000",
+                },
+                {
+                  "name": "NEKO_WEBRTC_TCPMUX",
+                  "value": "52000",
+                },
+                {
+                  "name": "NEKO_WEBRTC_NAT1TO1",
+                  "value": "127.0.0.1",
+                },
+                {
+                  "name": "NEKO_WEBRTC_ICELITE",
+                  "value": "true",
+                },
+                {
+                  "name": "NEKO_SERVER_PROXY",
+                  "value": "true",
+                },
+                {
+                  "name": "NEKO_MEMBER_PROVIDER",
+                  "value": "multiuser",
+                },
+                {
+                  "name": "NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "admin-password",
+                      "name": "neko-abcdefghij23",
+                    },
+                  },
+                },
+                {
+                  "name": "NEKO_MEMBER_MULTIUSER_USER_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "user-password",
+                      "name": "neko-abcdefghij23",
+                    },
+                  },
+                },
+                {
+                  "name": "NEKO_MEMBER_MULTIUSER_USER_PROFILE",
+                  "value": "{"can_host":false}",
+                },
+                {
+                  "name": "NEKO_SESSION_IMPLICIT_HOSTING",
+                  "value": "true",
+                },
+                {
+                  "name": "NEKO_FILETRANSFER_ENABLED",
+                  "value": "false",
+                },
+                {
+                  "name": "TZ",
+                  "value": "UTC",
+                },
+                {
+                  "name": "LANG",
+                  "value": "en_US.UTF-8",
+                },
+                {
+                  "name": "LANGUAGE",
+                  "value": "en_US:en",
+                },
+              ],
+              "image": "registry.test/hydra-session:test@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+              "name": "neko",
+              "ports": [
+                {
+                  "containerPort": 8080,
+                  "name": "http",
+                  "protocol": "TCP",
+                },
+                {
+                  "containerPort": 52000,
+                  "name": "media-udp",
+                  "protocol": "UDP",
+                },
+                {
+                  "containerPort": 52000,
+                  "name": "media-tcp",
+                  "protocol": "TCP",
+                },
+              ],
+              "readinessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 8080,
+                },
+                "periodSeconds": 3,
+                "timeoutSeconds": 2,
+              },
+              "resources": {
+                "limits": {
+                  "cpu": "3",
+                  "memory": "4Gi",
+                },
+                "requests": {
+                  "cpu": "500m",
+                  "memory": "1536Mi",
+                },
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "add": [
+                    "CHOWN",
+                    "KILL",
+                    "SETGID",
+                    "SETUID",
+                  ],
+                  "drop": [
+                    "ALL",
+                  ],
+                },
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/home/neko/.config/chromium",
+                  "name": "profile",
+                },
+                {
+                  "mountPath": "/etc/chromium/policies/managed/policies.json",
+                  "name": "chromium-config",
+                  "readOnly": true,
+                  "subPath": "policies.json",
+                },
+                {
+                  "mountPath": "/etc/chromium.d/hydra",
+                  "name": "chromium-config",
+                  "readOnly": true,
+                  "subPath": "hydra-flags",
+                },
+                {
+                  "mountPath": "/dev/shm",
+                  "name": "dshm",
+                },
+              ],
+            },
+            {
+              "command": [
+                "playwright-mcp",
+                "--cdp-endpoint",
+                "http://127.0.0.1:9222",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8931",
+              ],
+              "image": "registry.test/hydra-mcp:test@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+              "name": "mcp",
+              "ports": [
+                {
+                  "containerPort": 8931,
+                  "name": "mcp",
+                  "protocol": "TCP",
+                },
+              ],
+              "readinessProbe": {
+                "failureThreshold": 3,
+                "periodSeconds": 3,
+                "tcpSocket": {
+                  "port": 8931,
+                },
+                "timeoutSeconds": 2,
+              },
+              "resources": {
+                "limits": {
+                  "cpu": "500m",
+                  "memory": "512Mi",
+                },
+                "requests": {
+                  "cpu": "100m",
+                  "memory": "256Mi",
+                },
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL",
+                  ],
+                },
+                "readOnlyRootFilesystem": true,
+                "runAsGroup": 1000,
+                "runAsNonRoot": true,
+                "runAsUser": 1000,
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/tmp",
+                  "name": "tmp",
+                },
+              ],
+            },
+          ],
+          "enableServiceLinks": false,
+          "initContainers": [
+            {
+              "command": [
+                "sh",
+                "-c",
+                "rm -f /home/neko/.config/chromium/Singleton*",
+              ],
+              "image": "registry.test/hydra-session:test@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+              "name": "remove-locks",
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL",
+                  ],
+                },
+                "readOnlyRootFilesystem": true,
+                "runAsGroup": 1000,
+                "runAsNonRoot": true,
+                "runAsUser": 1000,
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/home/neko/.config/chromium",
+                  "name": "profile",
+                },
+              ],
+            },
+          ],
+          "securityContext": {
+            "seccompProfile": {
+              "type": "RuntimeDefault",
+            },
+          },
+          "volumes": [
+            {
+              "name": "profile",
+              "persistentVolumeClaim": {
+                "claimName": "profile-abcdefghij23",
+              },
+            },
+            {
+              "configMap": {
+                "name": "chromium-abcdefghij23",
+              },
+              "name": "chromium-config",
+            },
+            {
+              "emptyDir": {
+                "medium": "Memory",
+                "sizeLimit": "2Gi",
+              },
+              "name": "dshm",
+            },
+            {
+              "emptyDir": {},
+              "name": "tmp",
+            },
+          ],
+        },
+      },
+    },
+  },
+]
+`;

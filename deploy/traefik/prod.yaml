@@ -1,0 +1,54 @@
+# Values for the Traefik chart that k3s bundles (spec section 11.3). setup-k3s.sh applies this file.
+# Chart keys verified for the charts of k3s v1.34 to v1.37 (traefik 40.1.x and 41.4.x).
+#
+# Keep the respondingTimeouts blocks equal to deploy/traefik/dev.yaml (scripts/check-repo.ts
+# checks it). readTimeout 0s: the Traefik v3 default of 60 s would cut MCP streams and WebSockets.
+#
+# Fixed node ports (spec sections 11.3 and 11.6): the node port range is 30000-<last media port>,
+# and an automatic node port could take a media port. Keep these values equal to dev.yaml and
+# below 30128 (deploy/lib/cluster.sh). Kubernetes does not change healthCheckNodePort of an
+# existing Local Service, so set it before the first apply of externalTrafficPolicy: Local.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        nodePort: 30080
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true
+        transport:
+          respondingTimeouts:
+            readTimeout: "0s"
+            writeTimeout: "0s"
+            idleTimeout: "180s"
+      websecure:
+        nodePort: 30081
+        transport:
+          respondingTimeouts:
+            readTimeout: "0s"
+            writeTimeout: "0s"
+            idleTimeout: "180s"
+    service:
+      spec:
+        externalTrafficPolicy: Local
+        healthCheckNodePort: 30082
+    persistence:
+      enabled: true
+      storageClass: hydra-retain
+      accessMode: ReadWriteOnce
+      size: 128Mi
+      path: /data
+    certificatesResolvers:
+      letsencrypt:
+        acme:
+          storage: /data/acme.json
+          httpChallenge:
+            entryPoint: web

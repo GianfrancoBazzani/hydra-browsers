@@ -1,0 +1,98 @@
+# Test site for the e2e tests, dev overlay only (spec section 15.3). Session pods reach it at
+# http://testsite.hydra-testsite.svc.cluster.local/ through the one egress exception below.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hydra-testsite
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testsite
+  namespace: hydra-testsite
+  labels:
+    app: hydra-testsite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hydra-testsite
+  template:
+    metadata:
+      labels:
+        app: hydra-testsite
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: testsite
+          image: hydra-testsite
+          env:
+            - name: PORT
+              value: '8080'
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: testsite
+  namespace: hydra-testsite
+  labels:
+    app: hydra-testsite
+spec:
+  selector:
+    app: hydra-testsite
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# The only egress exception for session pods (spec section 15.3). It exists only in this overlay.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sessions-egress-testsite
+  namespace: hydra-sessions
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hydra-testsite
+          podSelector:
+            matchLabels:
+              app: hydra-testsite
+      ports:
+        - protocol: TCP
+          port: 8080

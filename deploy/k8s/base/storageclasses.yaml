@@ -1,0 +1,26 @@
+# StorageClasses with fixed folder names (spec section 5.2). setup-k3s.sh applies this file before
+# Traefik needs hydra-retain. Spike S4 (plan 09) verifies pathPattern.
+#
+# The pattern ends with "/" (spec section 5.2): local-path-provisioner rejects a rendered path that
+# does not start with "<namespace>/<pvc name>/". The provisioner joins the path with
+# filepath.Join, which removes the slash, so the folder is
+# <default-local-storage-path>/<namespace>/<pvc name>.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hydra-retain
+provisioner: rancher.io/local-path
+parameters:
+  pathPattern: '{{ .PVC.Namespace }}/{{ .PVC.Name }}/'
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hydra-profile
+provisioner: rancher.io/local-path
+parameters:
+  pathPattern: '{{ .PVC.Namespace }}/{{ .PVC.Name }}/'
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer

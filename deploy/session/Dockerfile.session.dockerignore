@@ -1,0 +1,3 @@
+# Build context filter for deploy/session/Dockerfile.session. The image copies no repository
+# files until spike S1 adds the supervisord Chromium file (then allow it here).
+*

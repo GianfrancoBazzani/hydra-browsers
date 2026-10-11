@@ -1,0 +1,37 @@
+# hydra-session image: Neko Chromium plus a normal font set (spec sections 3.4.4, 7.7, 11.1).
+# Build: docker build -f deploy/session/Dockerfile.session .
+# Spike S1 (plan 09) adds the supervisord Chromium file here only if Chromium can run with its
+# sandbox. Until then the image keeps the Neko default (--no-sandbox, spec section 7.10).
+
+FROM ghcr.io/m1k1o/neko/chromium:3.1.6@sha256:2471119c7b4010067f76f3421a78a8bcf35e3c223b2d1f4db084914ec915fb30
+
+# snapshot.debian.org timestamp for the font packages. Each build installs the same versions.
+# Neko 3.1.6 is built on Debian 13 (trixie), so the sources use the trixie suites.
+ARG DEBIAN_SNAPSHOT=20261002T203108Z
+
+# Use only the snapshot sources for this install, then restore the image's own sources file.
+RUN set -eux; \
+    test "$(cut -d. -f1 /etc/debian_version)" = 13; \
+    mv /etc/apt/sources.list.d/debian.sources /tmp/debian.sources; \
+    printf '%s\n' \
+      'Types: deb' \
+      "URIs: http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}" \
+      'Suites: trixie trixie-updates' \
+      'Components: main' \
+      'Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp' \
+      'Check-Valid-Until: no' \
+      '' \
+      'Types: deb' \
+      "URIs: http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}" \
+      'Suites: trixie-security' \
+      'Components: main' \
+      'Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp' \
+      'Check-Valid-Until: no' \
+      > /etc/apt/sources.list.d/snapshot.sources; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      fonts-noto fonts-noto-cjk fonts-noto-color-emoji fonts-liberation fonts-dejavu; \
+    rm /etc/apt/sources.list.d/snapshot.sources; \
+    mv /tmp/debian.sources /etc/apt/sources.list.d/debian.sources; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*

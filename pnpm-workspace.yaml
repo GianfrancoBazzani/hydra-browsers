@@ -1,0 +1,39 @@
+packages:
+  - "packages/*"
+
+# Rule 1: save exact versions
+savePrefix: ""
+
+# Rule 4: minimum release age, 7 days in minutes.
+# It is strict, because it is set explicitly (minimumReleaseAgeStrict defaults to true).
+minimumReleaseAge: 10080
+minimumReleaseAgeExcludePrune: true
+
+# Supply chain
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+trustLockfile: false
+
+# Trust policy exceptions (spec section 3.4.6). Each entry needs a review and a reason.
+# semver@6.3.1 (2023-07-10, npm CLI team, no install scripts) comes through @babel/core 7, a
+# dependency of eslint-plugin-react-hooks 7.1.1 (lint of @hydra/web, dev only). Newer semver
+# releases have npm provenance and 6.3.1 has none, so the policy sees a downgrade.
+# Reviewed on 2026-10-10 (plan 07).
+trustPolicyExclude:
+  - semver@6.3.1
+
+# Rule 6: install scripts only for reviewed packages
+strictDepBuilds: true
+allowBuilds:
+  better-sqlite3: true   # native SQLite binding (prebuilt download, or build from source)
+  # esbuild (through tsx): its postinstall only checks, links, or downloads the platform binary.
+  # pnpm installs that binary from the lockfile (optional dependency @esbuild/<platform>).
+  esbuild: false
+  # Add an entry only after a review, with the reason.
+
+# Node.js version for engine checks of dependencies
+nodeVersion: 24.21.0
+engineStrict: true
+
+# pnpm version from packageManager
+pmOnFail: download

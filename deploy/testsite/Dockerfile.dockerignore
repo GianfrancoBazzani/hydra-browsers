@@ -1,0 +1,13 @@
+# Build context filter for deploy/testsite/Dockerfile (BuildKit reads <Dockerfile>.dockerignore).
+.git
+**/node_modules
+**/dist
+**/.data
+**/coverage
+**/test-results
+**/playwright-report
+**/*.log
+**/.DS_Store
+**/.env
+**/.env.*
+deploy/k8s/overlays/dev/generated

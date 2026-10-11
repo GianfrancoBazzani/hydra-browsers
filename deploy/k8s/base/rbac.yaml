@@ -1,0 +1,75 @@
+# Gateway access to the Kubernetes API (spec section 11.2): a Role in hydra-sessions only, never a
+# ClusterRole. Never pods/portforward or pods/exec.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hydra-gateway
+  namespace: hydra
+  labels:
+    app: hydra-gateway
+# Only the gateway pod mounts the token (automountServiceAccountToken: true in its pod spec).
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hydra-gateway
+  namespace: hydra-sessions
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - ''
+    resources:
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ''
+    resources:
+      - pods/log
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hydra-gateway
+  namespace: hydra-sessions
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hydra-gateway
+subjects:
+  - kind: ServiceAccount
+    name: hydra-gateway
+    namespace: hydra

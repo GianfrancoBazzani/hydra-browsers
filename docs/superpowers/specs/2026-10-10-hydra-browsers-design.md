@@ -589,7 +589,7 @@ Session roles: `owner` (the creator, stored on the session row), `operator`, `vi
 - **Format:** `hyd_` + base62 of 32 random bytes. The UI shows the full token one time. After that, the
   UI shows only `hyd_` + the first 8 characters + `…` (the `prefix` column).
 - **Storage:** the DB stores `token_hmac` = HMAC-SHA256(subkey `agent-token`, token), unique index.
-- **Expiry is necessary:** 1, 7, 30, or 90 days. Default 30 days.
+- **Expiry is necessary:** 1, 7, 30, 90, or 365 days. Default 30 days.
 - **Validity.** A token is valid only if all these conditions are true:
   1. `revoked_at` is null and `expires_at` is in the future.
   2. The session exists and is not deleted.

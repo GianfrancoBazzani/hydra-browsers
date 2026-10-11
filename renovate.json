@@ -1,0 +1,70 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "rangeStrategy": "pin",
+  "pinDigests": true,
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-3 1 * *"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "k3s, k3d, and the rancher/k3s image in scripts/versions.sh",
+      "managerFilePatterns": ["/^scripts/versions\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\n\\w+=\"(?<currentValue>[^\"]+)\"",
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\n\\w+=\"[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "nodeVersion in pnpm-workspace.yaml (check-repo requires the value of .node-version)",
+      "managerFilePatterns": ["/^pnpm-workspace\\.yaml$/"],
+      "matchStrings": ["nodeVersion: (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "node",
+      "datasourceTemplate": "node-version",
+      "versioningTemplate": "node"
+    },
+    {
+      "customType": "regex",
+      "description": "pnpm@<version> in Dockerfiles (check-repo requires the version of packageManager)",
+      "managerFilePatterns": ["/(^|/)Dockerfile[^/]*$/"],
+      "matchStrings": ["pnpm@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "pnpm",
+      "datasourceTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "k3s release tags: v1.36.5+k3s1",
+      "matchDepNames": ["k3s-io/k3s"],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    },
+    {
+      "description": "k3s image tags: v1.36.5-k3s1",
+      "matchDepNames": ["rancher/k3s"],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-k3s(?<build>\\d+)$"
+    },
+    {
+      "description": "One pull request for k3s; the install.sh SHA-256 in scripts/setup-k3s.sh needs a manual update",
+      "matchDepNames": ["k3s-io/k3s", "rancher/k3s"],
+      "groupName": "k3s",
+      "prBodyNotes": [
+        "Read the k3s release notes first (spec section 3.4.6). Then update the install.sh SHA-256 in scripts/setup-k3s.sh (README, section Update k3s)."
+      ]
+    },
+    {
+      "description": "One pull request for all Node.js pins; check-repo requires equal versions",
+      "matchDepNames": ["node"],
+      "groupName": "Node.js"
+    },
+    {
+      "description": "One pull request for packageManager and the pnpm@ pins in Dockerfiles; check-repo requires equal versions",
+      "matchDepNames": ["pnpm"],
+      "groupName": "pnpm"
+    }
+  ]
+}

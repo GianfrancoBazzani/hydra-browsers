@@ -51,7 +51,8 @@ dots, and icons. Use the accessible value for text (spec).
 - The accessible token of each color is `--os-<color>-accessible`, for example `--os-red-accessible`.
 - The accessible light values of green, mint, and teal are darker than the Apple values (`#248A3D`,
   `#0C817B`, `#008299`). The Apple values fail WCAG AA on the translucent surfaces.
-- Secondary text (captions, column headers, hints) uses `--os-gray-accessible`.
+- Secondary text (captions, column headers, hints) uses `--os-gray-accessible`. Section 2.4 gives
+  its size.
 
 ### 2.2 Surface tokens
 
@@ -71,6 +72,8 @@ dots, and icons. Use the accessible value for text (spec).
 | `--os-accent` (spec) | `#007AFF` | `#0A84FF` | Focus ring, selection marks, switch on |
 | `--os-accent-fill` | `#0062D6` | `#0062D6` | Primary buttons, selected sidebar item |
 | `--os-danger-fill` | `#D70015` | `#D70015` | Destructive buttons |
+| `--os-accent-fill-hover` | `color-mix(in oklab, var(--os-accent-fill) 92%, var(--os-black))` | `color-mix(in oklab, var(--os-accent-fill) 92%, var(--os-black))` | Hover fill of primary buttons |
+| `--os-danger-fill-hover` | `color-mix(in oklab, var(--os-danger-fill) 92%, var(--os-black))` | `color-mix(in oklab, var(--os-danger-fill) 92%, var(--os-black))` | Hover fill of destructive buttons |
 | `--os-on-fill` | `#FFFFFF` | `#FFFFFF` | Text and icons on the two fill tokens |
 | `--os-separator` | `rgb(0 0 0 / 10%)` | `rgb(255 255 255 / 12%)` | Hairlines and input borders |
 | `--os-overlay` | `rgb(0 0 0 / 20%)` | `rgb(0 0 0 / 40%)` | Backdrop behind a sheet |
@@ -85,9 +88,12 @@ dots, and icons. Use the accessible value for text (spec).
 | Token | Light | Dark |
 |---|---|---|
 | `--os-wallpaper` | `linear-gradient(135deg, #DCE6F5 0%, #F1E4EC 100%)` | `linear-gradient(135deg, #1A2233 0%, #2B1F30 100%)` |
-| `--os-traffic-red` | `#FF5F57`, border `#E2463F` | same |
-| `--os-traffic-yellow` | `#FEBC2E`, border `#E1A116` | same |
-| `--os-traffic-green` | `#28C840`, border `#14AE29` | same |
+| `--os-traffic-red` | `#FF5F57` | same |
+| `--os-traffic-red-border` | `#E2463F` | same |
+| `--os-traffic-yellow` | `#FEBC2E` | same |
+| `--os-traffic-yellow-border` | `#E1A116` | same |
+| `--os-traffic-green` | `#28C840` | same |
+| `--os-traffic-green-border` | `#14AE29` | same |
 
 The contrast test of section 8 uses the two colors of each wallpaper gradient. If you change the
 wallpaper, run the test again.
@@ -106,6 +112,21 @@ wallpaper, run the test again.
 
 - Weights: 400 (regular), 500 (medium: controls), 600 (semibold: headers and titles).
 - Do not bundle font files. Do not include SF Pro (spec).
+
+#### Size of secondary text
+
+The color does not set the size. Gray text (`--os-gray-accessible`) and red text
+(`--os-red-accessible`) use `--os-text-xs` or `--os-text-base`, as the table shows.
+
+| Kind | Size | Examples |
+|---|---|---|
+| Caption: a short label or a value, not a sentence | `--os-text-xs` | Section headers, column headers, menu labels, the status bar, the state in the toolbar, an email under a name, "No sessions" in the sidebar |
+| Message: a sentence that the user reads | `--os-text-base` | Sheet descriptions, hints and errors under a field, form errors, notices such as "Only the owner and admins can change the settings.", a status next to a button such as "Saved" |
+
+- If the text is a sentence, or if it is near a control or body text, use `--os-text-base`.
+- A hint and the error that replaces it have the same size, so that the layout does not move.
+- Do not use `--os-text-xs` for a hint, an error, or a description. In a sheet, it looks smaller
+  than the description and the labels around it.
 
 ### 2.5 Shape and depth
 
@@ -136,6 +157,7 @@ The window shadow has a 1 px outline, a large soft drop shadow, and an inner 1 p
 |---|---|
 | `--os-duration-fast` | 120ms: hover, press, switch thumb |
 | `--os-duration-base` | 200ms: sheet in, menu in |
+| `--os-duration-out` | 150ms: sheet out, menu out (with `--os-ease-in`) |
 | `--os-ease-out` | `cubic-bezier(0.2, 0, 0, 1)`: elements that come in |
 | `--os-ease-in` | `cubic-bezier(0.4, 0, 1, 1)`: elements that go out (use 150ms) |
 | `--os-z-overlay` | 40 |
@@ -194,10 +216,10 @@ controls.
 | New-session button | 24px icon button with `IconPlus` in the header of "My sessions", `aria-label="New session"`. |
 | `Toolbar` | 52px. Left: session name (`--os-text-lg`, 600) and state (`--os-text-xs`, `--os-gray-accessible`). Center: `SegmentedControl` with the views. Right: **Start** or **Stop**, **Restart**, and a "more" menu (`IconDots`) with **Delete** (spec). |
 | `SegmentedControl` | Radix ToggleGroup (single). Height 28px, radius 6px, track `--os-tone`, selected segment `--os-segment-selected` with `shadow-os-control`, text `--os-text-base` weight 500. Arrow keys move between segments. Shows only the views that the user has rights for. |
-| `Button` | Height 28px (small: 24px), radius 6px, padding 0 12px, `--os-text-base` weight 500. Variants: `default` (`--os-tone`, hover `--os-tone-strong`), `primary` (`--os-accent-fill`), `destructive` (`--os-danger-fill`), `ghost` (transparent, hover `--os-tone`). Text on fills is `--os-on-fill`. Hover on a fill: `color-mix(in oklab, <fill> 92%, black)`. Disabled: opacity 40%. |
+| `Button` | Height 28px (small: 24px), radius 6px, padding 0 12px, `--os-text-base` weight 500. Variants: `default` (`--os-tone`, hover `--os-tone-strong`), `primary` (`--os-accent-fill`), `destructive` (`--os-danger-fill`), `ghost` (transparent, hover `--os-tone`). Text on fills is `--os-on-fill`. Hover on a fill: `--os-accent-fill-hover` or `--os-danger-fill-hover` (section 2.2, which mixes the fill 92% with `--os-black`). Disabled: opacity 40%. |
 | `Switch` | Radix Switch. Track 36x20px, radius full. Off: `--os-gray-4` (light) or `--os-gray-3` (dark). On: `--os-accent`. White thumb with `shadow-os-control`. |
 | Checkbox, radio | Radix. 16px. Checkbox radius 4px, radio radius full. Border 1px `--os-gray-2`. Checked: `--os-accent-fill` with a white mark. |
-| Text input | Height 28px, radius 6px, `bg-os-surface`, border 1px `--os-separator`, padding 0 8px, `--os-text-base`. Error text under it: `--os-text-xs`, `--os-red-accessible`. |
+| Text input | Height 28px, radius 6px, `bg-os-surface`, border 1px `--os-separator`, padding 0 8px, `--os-text-base`. Label above it: `--os-text-base`, `--os-foreground`, gap 4px. Hint under it: `--os-text-base`, `--os-gray-accessible`. Error under it (it replaces the hint): `--os-text-base`, `--os-red-accessible`. See "Size of secondary text" (section 2.4). |
 | `ChipInput` | Allowlist editor (spec). Chips: height 22px, radius 6px, `--os-tone`, `--os-text-sm`, a remove button with `IconX` 12px and `aria-label="Remove <host>"`. `Enter` or `,` adds a chip. `Backspace` in an empty input removes the last chip. |
 | `Table` | Rows 32px, `--os-text-base`. Header: `--os-text-xs`, weight 600, `--os-gray-accessible`, background `--os-gray-6` in the light theme and `--os-gray-5` in the dark theme (`bg-os-gray-6 dark:bg-os-gray-5`). On `--os-gray-5`, the light header text is only 4.16:1. Hairline between rows. Row hover: `--os-tone`. Numbers align right. |
 | `StatusDot` | 8px circle. Fill: `--os-green` (`running`), `--os-yellow` (`starting`, `stopping`), `--os-gray` (`stopped`), `--os-red` (`error`) (spec). Inner 1px border with the accessible variant of the same color, for 3:1 contrast. Visually hidden text with the state. |
@@ -271,6 +293,8 @@ The test reads the token values from `theme/tokens.css`, so that the test and th
   --color-os-accent: var(--os-accent);
   --color-os-accent-fill: var(--os-accent-fill);
   --color-os-danger-fill: var(--os-danger-fill);
+  --color-os-accent-fill-hover: var(--os-accent-fill-hover);
+  --color-os-danger-fill-hover: var(--os-danger-fill-hover);
   --color-os-on-fill: var(--os-on-fill);
   --color-os-separator: var(--os-separator);
   --color-os-overlay: var(--os-overlay);

@@ -1,0 +1,220 @@
+# CI on pull requests (spec sections 3.4.7 and 15.4). Plan 10 adds a Chromium step to the job
+# test, and the jobs deploy-test, e2e, long-stream-paths, and e2e-long.
+# Pinning rules (spec section 3.4.1): each action is a full commit SHA with its version in a
+# comment, and each runner is ubuntu-24.04.
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-repo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: node scripts/check-repo.ts
+
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm audit --audit-level high
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for the MCP proxy integration tests
+        run: pnpm --filter @hydra/mcp-sidecar exec playwright-mcp install-browser --with-deps --no-shell chromium
+      - run: pnpm test
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: The built server resolves @hydra/shared from dist
+        working-directory: packages/server
+        run: |
+          node dist/index.js
+          node --input-type=module --eval "const url = import.meta.resolve('@hydra/shared'); if (!url.endsWith('/packages/shared/dist/index.js')) throw new Error(url); console.log(url);"
+
+  deploy-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Deploy tests (no Docker; they use node, git, and kubectl)
+        run: bash deploy/test/run.sh
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - name: Unit tests of the e2e helpers
+        run: pnpm --filter @hydra/e2e run test:unit
+      - name: Install k3d (version of scripts/versions.sh, SHA-256 checked)
+        run: |
+          bash packages/e2e/scripts/install-k3d.sh "$RUNNER_TEMP/k3d"
+          echo "$RUNNER_TEMP/k3d" >> "$GITHUB_PATH"
+      - name: Resolve the dev host names to 127.0.0.1
+        run: echo '127.0.0.1 hydra.localhost live.hydra.localhost' | sudo tee -a /etc/hosts
+      - name: Create the dev cluster (images of this commit, dev overlay, test site)
+        run: bash scripts/dev-cluster.sh
+      # The Chromium of @playwright/test 1.63.0 (chromium-1243). The Chromium of @playwright/mcp
+      # in the job test (chromium-1247) is another revision; the two are independent.
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @hydra/e2e exec playwright install --with-deps chromium
+      - name: E2E tests without the long MCP stream test
+        run: pnpm e2e
+        env:
+          HYDRA_E2E_OUTPUT_DIR: ${{ runner.temp }}/hydra-e2e
+      - name: Upload the Playwright report
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-e2e
+          path: ${{ runner.temp }}/hydra-e2e/playwright-report
+          retention-days: 14
+      - name: Cluster diagnostics
+        if: failure() || cancelled()
+        run: bash packages/e2e/scripts/diagnostics.sh
+
+  long-stream-paths:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check for changes in deploy/traefik/ or scripts/versions.sh
+        id: paths
+        run: |
+          # HEAD is the merge commit of the pull request. HEAD^1 is the base branch.
+          changed="$(git diff --name-only HEAD^1 HEAD)"
+          if grep -qE '^(deploy/traefik/|scripts/versions\.sh$)' <<< "$changed"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e-long:
+    needs: long-stream-paths
+    if: needs.long-stream-paths.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - run: pnpm install --frozen-lockfile
+      - name: Install k3d (version of scripts/versions.sh, SHA-256 checked)
+        run: |
+          bash packages/e2e/scripts/install-k3d.sh "$RUNNER_TEMP/k3d"
+          echo "$RUNNER_TEMP/k3d" >> "$GITHUB_PATH"
+      - name: Resolve the dev host names to 127.0.0.1
+        run: echo '127.0.0.1 hydra.localhost live.hydra.localhost' | sudo tee -a /etc/hosts
+      - name: Create the dev cluster (images of this commit, dev overlay, test site)
+        run: bash scripts/dev-cluster.sh
+      # The Chromium of @playwright/test 1.63.0 (chromium-1243). The Chromium of @playwright/mcp
+      # in the job test (chromium-1247) is another revision; the two are independent.
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @hydra/e2e exec playwright install --with-deps chromium
+      - name: Long MCP stream test (10 min through Traefik)
+        run: pnpm --filter @hydra/e2e run test:long
+        env:
+          HYDRA_E2E_OUTPUT_DIR: ${{ runner.temp }}/hydra-e2e
+      - name: Upload the Playwright report
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-e2e-long
+          path: ${{ runner.temp }}/hydra-e2e/playwright-report
+          retention-days: 14
+      - name: Cluster diagnostics
+        if: failure() || cancelled()
+        run: bash packages/e2e/scripts/diagnostics.sh

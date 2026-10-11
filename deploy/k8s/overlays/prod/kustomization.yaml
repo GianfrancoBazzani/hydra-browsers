@@ -1,0 +1,46 @@
+# Production overlay (spec sections 3.4.4, 11.2, 11.8): kubectl apply -k deploy/k8s/overlays/prod
+#
+# Operator values: before the first apply, replace the example hostnames, the Elastic IP
+# (HYDRA_PUBLIC_IP), and the node IP (the private IP of the EC2 instance) below. Each hostname is
+# in two places: the URL in hydra-config and the Host() rule of its IngressRoute.
+# Media ports: the defaults are HYDRA_MEDIA_PORT_RANGE=52000-52099. If setup-k3s.sh ran with another
+# HYDRA_MEDIA_PORT_RANGE, add the same HYDRA_MEDIA_PORT_RANGE=FIRST-LAST literal to hydra-config
+# below and patch port and endPort of both entries (UDP and TCP) of the NetworkPolicy
+# sessions-ingress-media (JSON patch paths /spec/ingress/0/ports/0 and /spec/ingress/0/ports/1).
+# Open the same range in the security group of the instance (spec section 11.5).
+# The release workflow writes the image digests to images/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+components:
+  - images
+configMapGenerator:
+  - name: hydra-config
+    namespace: hydra
+    literals:
+      - HYDRA_PUBLIC_URL=https://hydra.example.com
+      - HYDRA_LIVE_URL=https://live.hydra.example.com
+      - HYDRA_PUBLIC_IP=203.0.113.10
+patches:
+  - target:
+      kind: IngressRoute
+      name: hydra-public
+    patch: |-
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`hydra.example.com`)
+  - target:
+      kind: IngressRoute
+      name: hydra-live
+    patch: |-
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`live.hydra.example.com`)
+  - target:
+      kind: NetworkPolicy
+      name: gateway-egress-apiserver
+    patch: |-
+      - op: replace
+        path: /spec/egress/0/to/0/ipBlock/cidr
+        value: 192.0.2.10/32

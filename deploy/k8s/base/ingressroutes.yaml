@@ -1,0 +1,36 @@
+# Traefik routes for HYDRA_PUBLIC_URL and HYDRA_LIVE_URL (spec section 11.2). One gateway process
+# serves both hostnames and routes by the Host header. Each overlay sets the hostnames; the dev
+# overlay also switches to the web entry point without TLS.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hydra-public
+  namespace: hydra
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`hydra.invalid`)
+      services:
+        - name: hydra-gateway
+          port: 8080
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hydra-live
+  namespace: hydra
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`live.hydra.invalid`)
+      services:
+        - name: hydra-gateway
+          port: 8080
+  tls:
+    certResolver: letsencrypt

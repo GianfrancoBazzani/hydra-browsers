@@ -1,0 +1,43 @@
+# k3d overlay (spec sections 3.4.4, 11.7, 15.3). scripts/dev-cluster.sh writes generated/ (the
+# local registry images and the node IP) and then runs: kubectl apply -k deploy/k8s/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - testsite.yaml
+components:
+  - generated
+configMapGenerator:
+  - name: hydra-config
+    namespace: hydra
+    literals:
+      - HYDRA_PUBLIC_URL=http://hydra.localhost
+      - HYDRA_LIVE_URL=http://live.hydra.localhost
+      - HYDRA_PUBLIC_IP=127.0.0.1
+patches:
+  - target:
+      kind: IngressRoute
+      name: hydra-public
+    patch: |-
+      - op: replace
+        path: /spec/entryPoints
+        value:
+          - web
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`hydra.localhost`)
+      - op: remove
+        path: /spec/tls
+  - target:
+      kind: IngressRoute
+      name: hydra-live
+    patch: |-
+      - op: replace
+        path: /spec/entryPoints
+        value:
+          - web
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`live.hydra.localhost`)
+      - op: remove
+        path: /spec/tls

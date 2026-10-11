@@ -1,0 +1,41 @@
+{
+  "name": "@hydra/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@hydra/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "hydra": "./dist/cli/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/auth/common-passwords.txt dist/auth/common-passwords.txt",
+    "hydra": "tsx --conditions=@hydra/source src/cli/main.ts",
+    "dev": "tsx watch --conditions=@hydra/source src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate --dialect sqlite --schema ./src/db/schema.ts --out ./drizzle"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.5",
+    "@hydra/shared": "workspace:*",
+    "@kubernetes/client-node": "2.0.0",
+    "@node-rs/argon2": "2.2.1",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
+    "fastify": "5.12.5",
+    "pino": "10.4.0",
+    "undici": "8.11.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@types/better-sqlite3": "9.6.0",
+    "drizzle-kit": "0.31.11"
+  }
+}

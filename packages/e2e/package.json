@@ -1,0 +1,22 @@
+{
+  "name": "@hydra/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test --project=e2e --grep-invert @long",
+    "test:long": "playwright test --project=e2e --grep @long",
+    "test:all": "playwright test --project=e2e",
+    "test:unit": "vitest run -c vitest.unit.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@hydra/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "vitest": "5.0.3",
+    "zod": "4.6.5"
+  }
+}
