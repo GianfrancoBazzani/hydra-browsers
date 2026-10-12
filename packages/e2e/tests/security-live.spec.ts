@@ -7,7 +7,6 @@ import {
   liveCookieValue,
   liveStatus,
   openLiveView,
-  openPlayingLiveView,
   videoState,
 } from '../src/live.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -115,8 +114,10 @@ test('two browser tabs show two sessions at the same time, and both live views s
 }) => {
   const { a, b } = sessionPair;
   const second = await page.context().newPage();
-  const frameA = await openPlayingLiveView(page, a.id);
-  const frameB = await openPlayingLiveView(second, b.id);
+  const frameA = await openLiveView(page, a.id);
+  const frameB = await openLiveView(second, b.id);
+  await expectVideoPlays(frameA);
+  await expectVideoPlays(frameB);
   // One grant cookie for each session (spec section 9.2).
   expect(await liveCookieValue(page.context(), a.id)).not.toBe('');
   expect(await liveCookieValue(page.context(), b.id)).not.toBe('');

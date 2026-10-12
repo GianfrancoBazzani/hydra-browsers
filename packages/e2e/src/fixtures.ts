@@ -3,7 +3,6 @@ import type { SessionResource } from '@hydra/shared';
 import { deleteSessionQuietly, HydraApi, startNewSession } from './api.js';
 import { E2E } from './env.js';
 import { readRunState, STATE_FILES, type RunRole, type RunState } from './run-state.js';
-import { attachSessionLogs } from './session-logs.js';
 
 export interface SessionPair {
   a: SessionResource;
@@ -21,8 +20,6 @@ interface WorkerFixtures {
 interface TestFixtures {
   /** Opens a page in a new browser context of another user. */
   pageAs: (role: RunRole) => Promise<Page>;
-  /** After a failed test, attaches the logs of the session pods (before sessionPair deletes them). */
-  sessionLogs: void;
 }
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -75,16 +72,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       await context.close();
     }
   },
-  sessionLogs: [
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use, testInfo) => {
-      await use();
-      if (testInfo.status !== testInfo.expectedStatus) {
-        await attachSessionLogs(testInfo);
-      }
-    },
-    { auto: true, timeout: 120_000 },
-  ],
 });
 
 export { expect };

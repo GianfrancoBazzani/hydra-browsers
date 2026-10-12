@@ -14,7 +14,6 @@ import { expect, test } from '../src/fixtures.js';
 import { expectVideoPlays, openLiveView } from '../src/live.js';
 import { initializeMessage, mcpPost } from '../src/mcp-raw.js';
 import { callTool, connectMcp, evaluate, mcpEndpoint, navigate } from '../src/mcp.js';
-import { attachSessionLogs, sessionPodName } from '../src/session-logs.js';
 
 /** Spec section 8.2 step 2. */
 const SESSION_NOT_RUNNING = {
@@ -298,12 +297,6 @@ test('main flow: login, session, live view, agent, audit, stop and start, delete
       // And deletes its vault credentials (spec section 15.3 step 11).
       expect((await adminApi.call('GET', `/api/sessions/${sid()}/vault`)).status).toBe(404);
     });
-  } catch (err) {
-    // The finally block deletes the session before the sessionLogs fixture runs.
-    if (session !== undefined && !deleted) {
-      await attachSessionLogs(test.info(), [sessionPodName(session.id)]);
-    }
-    throw err;
   } finally {
     await mcp?.close();
     if (session !== undefined && !deleted) {
