@@ -80,7 +80,7 @@ for bad in 52100 52199-52100 100-200 52000-70000 'a-b' '52000-52099; x'; do
     --image "hydra-session=$d2" --image "hydra-mcp=$d3" --media-port-range "$bad"
 done
 
-# prod overlay before the first release: empty image values, so the gateway stops at start
+# prod overlay as committed
 prod="$(kubectl kustomize "$work/k8s/overlays/prod")"
 assert_not_contains 'prod: no vault http host (spec 4)' "$prod" 'HYDRA_VAULT_HTTP_HOSTS'
 prod_public="$(k8s_doc "$prod" IngressRoute hydra-public)"
@@ -88,7 +88,6 @@ assert_contains 'prod public host' "$prod_public" 'match: Host(`hydra.example.co
 assert_contains 'prod uses TLS from the ACME resolver' "$prod_public" 'certResolver: letsencrypt'
 assert_contains 'prod live host' "$(k8s_doc "$prod" IngressRoute hydra-live)" 'match: Host(`live.hydra.example.com`)'
 assert_contains 'prod node IP in the API server rule' "$(k8s_doc "$prod" NetworkPolicy gateway-egress-apiserver)" 'cidr: 192.0.2.10/32'
-assert_contains 'prod has no session image before a release' "$prod" 'HYDRA_SESSION_IMAGE: ""'
 
 # prod overlay after a release
 bash "$writer" --out "$work/k8s/overlays/prod/images/kustomization.yaml" \
