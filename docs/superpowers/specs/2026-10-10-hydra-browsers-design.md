@@ -307,10 +307,12 @@ entry needs a review and a reason comment before it becomes `true`. All other en
 - **Our images** (`hydra-gateway`, `hydra-session`, `hydra-mcp`, `hydra-testsite`): CI builds them from
   one commit and tags them with the commit SHA. The code has no default for `HYDRA_SESSION_IMAGE` and
   `HYDRA_MCP_IMAGE`.
-  - **Production:** the release workflow pushes the images. Then it opens a pull request that writes
-    their digests to the `prod` overlay: Kustomize `images:` for the pods, and the generated ConfigMap
-    `hydra-images` for `HYDRA_SESSION_IMAGE` and `HYDRA_MCP_IMAGE`. Kustomize `images:` does not change
-    environment values, so the ConfigMap is necessary.
+  - **Production:** the release workflow pushes the images. Then it writes their digests to the `prod`
+    overlay and commits this change directly to the default branch (no pull request): Kustomize
+    `images:` for the pods, and the generated ConfigMap `hydra-images` for `HYDRA_SESSION_IMAGE` and
+    `HYDRA_MCP_IMAGE`. Kustomize `images:` does not change environment values, so the ConfigMap is
+    necessary. The workflow commits only digests of a commit that is on the default branch and that is
+    not older than the release in the overlay.
   - **k3d (development and CI):** `dev-cluster.sh` creates a local registry. The build pushes the images
     to it and writes the same values into the `dev` overlay. These files are generated and not committed.
 

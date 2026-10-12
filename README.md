@@ -88,15 +88,6 @@ The repository does not create the cloud resources. Prepare these items first:
 - Two DNS records to the public IP, for example `hydra.example.com` (dashboard, API, and MCP) and
   `live.hydra.example.com` (live view). The two hostnames must have the same registrable domain.
 - A persistent volume for the state folder (default `/var/lib/hydra`), with daily snapshots.
-- An alarm when the volume is 80% full.
-
-### Build the images
-
-1. In the GitHub repository settings, let GitHub Actions create pull requests.
-2. Run the `release` workflow from the default branch, or push a `v*` tag.
-3. The workflow builds the four images, pushes them to `ghcr.io`, and opens a pull request with
-   their digests.
-4. Close and reopen that pull request to run CI on it, then merge it.
 
 ### Install k3s on the server
 
@@ -147,7 +138,8 @@ and in the firewall. The comments in `scripts/setup-k3s.sh` give the details.
 
 ### Update
 
-1. Run the `release` workflow and merge its pull request.
+1. Run the `release` workflow from the default branch, or push a `v*` tag. The workflow commits the
+   new image digests to the default branch.
 2. Pull the new commit on the server.
 3. Run `kubectl apply -k deploy/k8s/overlays/prod`.
 

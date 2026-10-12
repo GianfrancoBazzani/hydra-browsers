@@ -88,7 +88,7 @@ assert_contains 'prod live host' "$(k8s_doc "$prod" IngressRoute hydra-live)" 'm
 assert_contains 'prod node IP in the API server rule' "$(k8s_doc "$prod" NetworkPolicy gateway-egress-apiserver)" 'cidr: 192.0.2.10/32'
 assert_contains 'prod has no session image before a release' "$prod" 'HYDRA_SESSION_IMAGE: ""'
 
-# prod overlay after a release pull request
+# prod overlay after a release
 bash "$writer" --out "$work/k8s/overlays/prod/images/kustomization.yaml" \
   --registry ghcr.io/example --tag 0123456789abcdef0123456789abcdef01234567 \
   --image "hydra-gateway=$d1" --image "hydra-session=$d2" --image "hydra-mcp=$d3" \
@@ -100,7 +100,7 @@ assert_contains 'prod HYDRA_SESSION_IMAGE' "$prod" "HYDRA_SESSION_IMAGE: ghcr.io
 assert_contains 'prod HYDRA_MCP_IMAGE' "$prod" "HYDRA_MCP_IMAGE: ghcr.io/example/hydra-mcp:$tag@$d3"
 assert_not_contains 'prod has no test site' "$prod" 'hydra-testsite'
 
-# writer: same arguments give the same bytes (the release job skips an empty pull request)
+# writer: same arguments give the same bytes (the release job skips an empty commit)
 args=(--registry ghcr.io/example --tag t1 --image "hydra-mcp=$d3" --image "hydra-session=$d2")
 bash "$writer" --out "$work/a.yaml" "${args[@]}"
 bash "$writer" --out "$work/b.yaml" "${args[@]}"

@@ -225,7 +225,7 @@ k3s $K3S_VERSION is ready. Next steps (spec sections 6.1, 6.3, 11.8):
      set the same HYDRA_MEDIA_PORT_RANGE in the hydra-config of that overlay and patch the port
      range (port and endPort of the UDP and TCP entries) of the NetworkPolicy
      sessions-ingress-media there, and open the range in the security group (spec section 11.5).
-     Run the release workflow and merge its pull request, so that the prod
+     Run the release workflow and pull its commit, so that the prod
      overlay has image digests. If the images on ghcr.io are private, give k3s a read token in
      /etc/rancher/k3s/registries.yaml.
   3. Apply the prod overlay:

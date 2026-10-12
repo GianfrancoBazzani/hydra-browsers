@@ -1,13 +1,11 @@
 # Release (spec section 3.4.4): build and push the four images from one commit, tagged with the
-# commit SHA, then open a pull request that writes their digests to the prod overlay.
-#
-# Repository settings: allow GitHub Actions to create pull requests. GitHub starts no workflows for
-# a pull request that GITHUB_TOKEN opens, so close and reopen the pull request to run CI on it.
+# commit SHA, then write their digests to the prod overlay and commit this change directly to the
+# default branch (no pull request). GitHub starts no workflows for a push that GITHUB_TOKEN makes.
 # Images are linux/amd64 (x86_64 EC2 instance types).
 #
 # A run from a branch other than the default branch builds and pushes the four images (the images
-# job runs for any ref), but the overlay job does not run and opens no pull request: the images of
-# unmerged branch code must not reach the prod overlay. The pull request names the source ref.
+# job runs for any ref), but the overlay job does not run and commits nothing: the images of
+# unmerged branch code must not reach the prod overlay. The commit message names the source ref.
 name: release
 
 on:
@@ -111,16 +109,14 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
   overlay:
-    name: Open the prod overlay pull request
+    name: Commit the image digests to the prod overlay
     if: github.ref_type == 'tag' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     needs: images
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      pull-requests: write
     env:
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
-      BRANCH: release/images-${{ github.sha }}
       COMMIT: ${{ github.sha }}
       SOURCE_REF: ${{ github.ref }}
       REGISTRY: ${{ needs.images.outputs.registry }}
@@ -142,6 +138,16 @@ jobs:
             exit 1
           }
 
+      # Without a review, an older commit (for example a new tag on an old commit) must not replace
+      # the digests of a newer release. newTag in the overlay is the commit of the last release.
+      - name: Refuse a commit that is older than the release in the prod overlay
+        run: |
+          released="$(sed -n "s/^    newTag: '\(.*\)'$/\1/p" deploy/k8s/overlays/prod/images/kustomization.yaml | head -1)"
+          if [[ -n "$released" && "$released" != "$COMMIT" ]] && git merge-base --is-ancestor "$COMMIT" "$released" 2>/dev/null; then
+            echo "::error::The prod overlay has the release of $released, which is newer than $COMMIT: not writing older image digests."
+            exit 1
+          fi
+
       - name: Write the image digests to the prod overlay
         run: |
           bash deploy/k8s/write-overlay-component.sh \
@@ -153,9 +159,7 @@ jobs:
             --source "release workflow, commit $COMMIT"
           kubectl kustomize deploy/k8s/overlays/prod > /dev/null
 
-      - name: Open the pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Commit and push to the default branch
         run: |
           if git diff --quiet; then
             echo "The prod overlay already has the digests of $COMMIT."
@@ -163,15 +167,16 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch -c "$BRANCH"
           git add deploy/k8s/overlays/prod/images/kustomization.yaml
-          git commit -m "Release images ${COMMIT:0:12}"
-          git push --force origin "$BRANCH"
-          open_prs="$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')"
-          if [[ "$open_prs" != 0 ]]; then
-            echo "The open pull request for $BRANCH exists."
-            exit 0
-          fi
-          gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
-            --title "Release images ${COMMIT:0:12}" \
-            --body "Writes the digests of the images built from commit $COMMIT (source ref $SOURCE_REF) to the prod overlay (spec section 3.4.4). After the merge, deploy with: kubectl apply -k deploy/k8s/overlays/prod"
+          git commit -m "Release images ${COMMIT:0:12}" \
+            -m "Writes the digests of the images built from commit $COMMIT (source ref $SOURCE_REF) to the prod overlay (spec section 3.4.4). Deploy with: kubectl apply -k deploy/k8s/overlays/prod"
+          # The default branch can move during the run: rebase on it and push again.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$BASE_BRANCH"; then
+              exit 0
+            fi
+            echo "The push failed (attempt $attempt): rebasing on $BASE_BRANCH."
+            git pull --rebase origin "$BASE_BRANCH"
+          done
+          echo "::error::Could not push the image digests to $BASE_BRANCH."
+          exit 1

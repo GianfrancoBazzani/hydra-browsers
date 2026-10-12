@@ -1,5 +1,5 @@
 # Written by .github/workflows/release.yml with deploy/k8s/write-overlay-component.sh.
-# No release yet: run the release workflow and merge its pull request before the first deploy.
+# No release yet: run the release workflow before the first deploy.
 # Until then the gateway stops with a message that names HYDRA_SESSION_IMAGE.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
