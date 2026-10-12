@@ -69,6 +69,16 @@ export class ActivityTracker implements ActivityProvider {
     return state ? this.#summary(state, this.#clock.now()) : { ...EMPTY };
   }
 
+  /**
+   * The MCP server no longer knows this MCP session (404): it is not an agent anymore. Its client
+   * initializes again with a new ID, and without this the old ID would count for 60 s more.
+   */
+  endMcpSession(sessionId: string, mcpSessionId: string): void {
+    const state = this.#sessions.get(sessionId);
+    if (state === undefined || !state.agents.delete(mcpSessionId)) return;
+    this.#publishIfChanged(sessionId, state, this.#clock.now());
+  }
+
   /** Removes expired values and publishes session.activity for each summary that changed (the timer calls it). */
   sweep(): void {
     const now = this.#clock.now();

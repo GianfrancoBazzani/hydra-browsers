@@ -150,6 +150,24 @@ describe('ActivityTracker', () => {
     expect(tracker.get('s2').lastToolCall?.status).toBe('pending');
   });
 
+  it('stops to count an MCP session that the MCP server ended, and keeps the last tool call', () => {
+    const { tracker, published, connect, toolCall, finish } = setup();
+    connect('s1', 'm1');
+    finish(toolCall('s1', 'm2', 'browser_tabs'), 'error', 3);
+    expect(tracker.get('s1').activeAgentCount).toBe(2);
+    published.length = 0;
+    tracker.endMcpSession('s1', 'm2');
+    expect(tracker.get('s1')).toEqual({
+      activeAgentCount: 1,
+      lastToolCall: { tool: 'browser_tabs', status: 'error', durationMs: 3, startedAt: 1_000_000 },
+    });
+    expect(published).toHaveLength(1);
+    expect(published[0]?.agentActivity.activeAgentCount).toBe(1);
+    tracker.endMcpSession('s1', 'unknown');
+    tracker.endMcpSession('s9', 'm1');
+    expect(published).toHaveLength(1);
+  });
+
   it('ignores audit events of other kinds and stops after stop()', () => {
     const { tracker, emit, connect, clock } = setup();
     emit({
