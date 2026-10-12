@@ -68,7 +68,10 @@ interface McpRoute {
   Params: { sid: string };
 }
 
-type ProxyDeps = Pick<AppDeps, 'audit' | 'clock' | 'logger' | 'mcpStreams' | 'podEndpoints'>;
+type ProxyDeps = Pick<
+  AppDeps,
+  'activity' | 'audit' | 'clock' | 'logger' | 'mcpStreams' | 'podEndpoints'
+>;
 
 function mcpSessionIdOf(request: FastifyRequest): string | null {
   const value = request.headers['mcp-session-id'];
@@ -224,6 +227,12 @@ async function proxyToPod(
     // Every pending call gets a final status on each path (no-op after a normal end).
     exchange.close(STREAM_CLOSED);
     finish();
+    // After the audit updates of this request: each of them marks the MCP session as active again.
+    // The same cut as in the audit data, because the tracker reads the IDs from there.
+    const mcpSessionId = cutClientField(mcpSessionIdOf(request));
+    if (upstream.statusCode === 404 && mcpSessionId !== null) {
+      deps.activity.endMcpSession(principal.sessionId, mcpSessionId);
+    }
   }
 }
 

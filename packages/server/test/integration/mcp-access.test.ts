@@ -163,6 +163,29 @@ describe('MCP proxy and session sharing', { timeout: 60_000 }, () => {
     }
   });
 
+  it('does not count an MCP session that the pod no longer knows (404), after the agent initializes again', async () => {
+    const token = await createAgentToken(gw, owner.cookie, owner.sessionId);
+    // A restart of the session ended the MCP session of the agent: the pod answers 404.
+    const stale = await mcpPost(
+      gw,
+      owner.sessionId,
+      token.secret,
+      {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: { name: 'browser_tabs', arguments: { action: 'list' } },
+      },
+      { 'mcp-session-id': 'ended-mcp-session' },
+    );
+    expect(stale.statusCode).toBe(404);
+    await stale.body.text();
+    await connectAgent(token.secret);
+
+    const res = await apiRequest(gw, owner.cookie, 'GET', `/api/sessions/${owner.sessionId}`);
+    expect(res.json<{ agentActivity: AgentActivity }>().agentActivity.activeAgentCount).toBe(1);
+  });
+
   it('counts two agents, and the count goes down 60 s after their last activity', async () => {
     const first = await createAgentToken(gw, owner.cookie, owner.sessionId);
     const second = await createAgentToken(gw, owner.cookie, owner.sessionId);
