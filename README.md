@@ -138,10 +138,8 @@ and in the firewall. The comments in `scripts/setup-k3s.sh` give the details.
 
 ### Update
 
-1. Run the `release` workflow from the default branch, or push a `v*` tag. The workflow commits the
-   new image digests to the default branch.
-2. Pull the new commit on the server.
-3. Run `kubectl apply -k deploy/k8s/overlays/prod`.
+1. Pull the new commit on the server.
+2. Run `kubectl apply -k deploy/k8s/overlays/prod`.
 
 At start, the gateway makes a backup of the database and then runs the migrations. If a migration
 fails, the gateway stops and does not serve requests.

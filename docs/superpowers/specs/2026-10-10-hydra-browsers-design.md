@@ -2,6 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Status:** Approved in brainstorming. Revised after the first written-spec review, waiting for the next review.
+  Revised on 2026-10-12: secrets vault (sections 6.9, 8.8, 8.9, and the related changes), waiting for review.
 - **Audience:** engineers (human or agent) who implement Hydra Browsers version 1
 
 ---
@@ -16,6 +17,9 @@ the agent see and use the same Chromium tabs at the same time.
 
 The main use is tasks on third-party sites with the team's own accounts. The human does the login,
 2FA, and captchas by hand in the live view. The agent then continues from the logged-in state.
+Alternatively, the owner puts credentials into the vault of the session (section 6.9). The agent then
+fills the username, the password, and the 2FA code into the login form without seeing these values
+(section 8.8).
 
 ### 1.1 Success criteria
 
@@ -26,6 +30,9 @@ The main use is tasks on third-party sites with the team's own accounts. The hum
    while the user watches. The audit log shows each tool call.
 5. After a stop and a start of the session, the site login is still there.
 6. All security e2e tests (section 15.3) pass.
+7. The owner adds a credential with a username, a password, and a TOTP secret to the vault of a session.
+   The agent logs in to a site with `vault_fill`. The MCP responses and the audit log contain none of
+   the values.
 
 ### 1.2 Decisions taken during brainstorming
 
@@ -45,6 +52,7 @@ The main use is tasks on third-party sites with the team's own accounts. The hum
 | Infrastructure | Cloud resources (EC2, security group, DNS, volume, snapshots) are not in this repo (section 11.5). The repo has the host setup script, the dev cluster script, and the Kubernetes manifests. |
 | Anti-detection | Not in scope. Only honest environment settings (locale, fonts, screen size). |
 | Dependencies | Exact pins everywhere: pnpm, Node.js, packages, images (digests), Actions (SHAs), k3s. 7-day minimum release age. |
+| Secrets vault | Credentials for each session, encrypted in the gateway DB. The agent fills a value by reference (`vault_fill`) and never gets it. A fill works only on the website of the credential. The gateway removes vault values from all MCP responses. Protection against accidental exposure, not against a malicious agent (section 8.7). |
 
 ### 1.3 Terminology
 
@@ -65,7 +73,11 @@ Each term has one meaning in this spec and in the code.
 | **MCP stream** | An open MCP response (`text/event-stream`), or the GET stream of an MCP session. |
 | **SSE stream** | An open dashboard event stream (section 10.3). |
 | **video stream** | The WebRTC media of one live view. |
-| **view** | One of the five dashboard views of a session: Live, Tokens, Sharing, Activity, Settings. |
+| **vault** | The encrypted credentials of one session (section 6.9). |
+| **credential** | One entry of a vault: a name, a website, and one or more of a username, a password, and a TOTP secret. A credential is not a login session. |
+| **vault value** | The username, the password, or the current TOTP code of a credential. |
+| **fill** | The sidecar puts one vault value into one editable element of the page (section 8.8). |
+| **view** | One of the six dashboard views of a session: Live, Tokens, Vault, Sharing, Activity, Settings. |
 | **browser tab** | A tab of the local browser of a team member. |
 | **Chromium tab** | A tab in the Chromium of a session. |
 
@@ -128,7 +140,7 @@ hydra-browsers/
 │  ├─ shared/   @hydra/shared   zod schemas, API types, constants (Node + browser)
 │  ├─ server/   @hydra/server   gateway, orchestrator, proxies, db, CLI
 │  ├─ web/      @hydra/web      React dashboard
-│  ├─ mcp-sidecar/ @hydra/mcp-sidecar  exact @playwright/mcp dependency for the hydra-mcp image
+│  ├─ mcp-sidecar/ @hydra/mcp-sidecar  hydra-mcp program: embeds @playwright/mcp, adds the vault fill (section 8.8)
 │  ├─ testsite/ @hydra/testsite small HTTP server for the e2e tests (section 15.3)
 │  └─ e2e/      @hydra/e2e      Playwright end-to-end tests on k3d
 ├─ deploy/
@@ -171,7 +183,8 @@ Each module has one purpose and a small public interface.
 | `tokens/` | Agent token create, list, and revoke, and `resolveAgentPrincipal()` (sections 6.6 and 8.2). | `crypto`, `db`, `access`, `audit`, `events` |
 | `orchestrator/` | Kubernetes client, manifest builders, watch, reconciler, `podEndpoint(sid, port)` (sections 7.3 and 7.9). | `config`, `crypto`, `db`, `audit` |
 | `sessions/` | Session service: create, update, start, stop, restart, delete. Capacity check and media port allocation. | `db`, `tokens`, `orchestrator`, `audit` |
-| `mcp-proxy/` | Proxy, JSON-RPC and SSE parsers, tool deny list, MCP stream registry, agent activity summary. | `tokens`, `access`, `auth` (rate limiter), `db`, `audit`, `events`, `orchestrator` |
+| `vault/` | Credential service: create, update, delete, reveal. Encryption, TOTP, site match, the values for a fill, and the redaction sets (sections 6.9, 8.8, 8.9). | `config`, `crypto`, `db`, `access`, `audit`, `events` |
+| `mcp-proxy/` | Proxy, JSON-RPC and SSE parsers, tool deny list, vault tool calls, response redaction, MCP stream registry, agent activity summary. | `tokens`, `access`, `auth` (rate limiter), `db`, `audit`, `events`, `orchestrator`, `vault` |
 | `live-proxy/` | Live tickets, live grants, Neko login injection, HTTP/WS proxy. | `auth`, `access`, `crypto`, `db`, `audit`, `events`, `orchestrator` |
 | `api/` | Fastify routes and SSE endpoints for the dashboard. | all service modules |
 | `static/` | Serve the `@hydra/web` build, with the headers of section 6.8. | `config` |
@@ -188,15 +201,17 @@ Each module has one purpose and a small public interface.
 - `theme/`: design tokens as CSS variables (light and dark), Tailwind v4 theme.
 - `components/os/`: `AppWindow`, `TrafficLights`, `Sidebar`, `Toolbar`, `SegmentedControl`, `Sheet`,
   `Button`, `Switch`, `ChipInput`, `Table`, `StatusDot`, `Banner`.
-- `routes/`: `login`, `change-password`, `sessions/:sid/{live,tokens,sharing,activity,settings}`,
+- `routes/`: `login`, `change-password`, `sessions/:sid/{live,tokens,vault,sharing,activity,settings}`,
   `admin/users`, `admin/sessions`.
 - `api/`: TanStack Query hooks. They validate each response with the `@hydra/shared` schemas.
 - `lib/sse.ts`: the SSE client for session events.
 
 ### 3.3 `@hydra/shared`
 
-- zod schemas for all API requests and responses.
+- zod schemas for all API requests and responses, and for the arguments of `vault_fill` (section 8.8).
 - Constants: global roles, session roles, actions, session states, error codes, event kinds.
+- Vault helpers without Node.js APIs: the `otpauth://` URI parser, the base32 rules, and
+  `vaultSiteMatches` (section 6.9).
 
 ### 3.4 Dependency pinning policy
 
@@ -296,7 +311,11 @@ entry needs a review and a reason comment before it becomes `true`. All other en
   - `ghcr.io/m1k1o/neko/chromium:3.1.6@sha256:…`
   - `registry.k8s.io/pause:<version>@sha256:…` (image pre-pull, section 11.2)
 - **`hydra-mcp`:** the build uses the workspace package `@hydra/mcp-sidecar` (`packages/mcp-sidecar/`).
-  This package has `@playwright/mcp` `0.0.83` as an exact dependency. The Dockerfile runs
+  This package has these exact dependencies: `@playwright/mcp` `0.0.83`, `playwright` with the exact
+  version that `@playwright/mcp` `0.0.83` uses (`1.64.0-alpha-1790635538000`), the MCP TypeScript SDK,
+  and `@hydra/shared` (`workspace:*`). The CI check fails if the `playwright` version is not equal to the
+  version that `@playwright/mcp` requires, because two Playwright copies in one process cannot share
+  the snapshot refs (section 8.8). The Dockerfile runs
   `pnpm --filter @hydra/mcp-sidecar deploy --prod /out` after `pnpm install --frozen-lockfile`. Thus
   the lockfile also pins all transitive dependencies of Playwright MCP. Do not use `npm install -g`,
   because it does not use the lockfile.
@@ -351,6 +370,8 @@ It fails if one of these conditions is true:
 - The Node.js versions in `.node-version`, `devEngines.runtime`, `nodeVersion`, and the Dockerfile tags
   are not all equal.
 - The pnpm version in a Dockerfile is not equal to `packageManager`.
+- The `playwright` version of `@hydra/mcp-sidecar` is not equal to the `playwright` version that its
+  `@playwright/mcp` requires (section 3.4.4).
 - The Traefik entry point timeouts in `deploy/traefik/prod.yaml` and `deploy/traefik/dev.yaml` are not
   equal (section 11.3).
 
@@ -387,6 +408,7 @@ the gateway stops with a message that names the variable.
 | `HYDRA_DEFAULT_TIMEZONE` | `UTC` | Default timezone for new sessions |
 | `HYDRA_DEFAULT_LANGUAGE` | `en-US` | Default language for new sessions |
 | `HYDRA_AUDIT_RETENTION_DAYS` | `90` | Audit retention |
+| `HYDRA_VAULT_HTTP_HOSTS` | empty | Comma-separated hostnames for which a credential website can use `http` (section 6.9). Only the `dev` overlay sets it, to the test site host (section 15.3). |
 | `HYDRA_LOG_LEVEL` | `info` | pino log level |
 | `PORT` | `8080` | HTTP port of the gateway |
 
@@ -405,6 +427,8 @@ Validation rules:
   check of Start counts the sessions that hold a media port (section 7.9), so a start that passes the
   check always finds a free port.
 - `HYDRA_SESSION_TRANSPORT=port-forward` is permitted only if both URLs use `localhost` hostnames.
+- Each entry of `HYDRA_VAULT_HTTP_HOSTS` must be a valid lowercase hostname, without a scheme, a port, or
+  a path.
 
 `HYDRA_MEDIA_PORT_RANGE` must be inside the k3s `service-node-port-range` (section 11.6). At start,
 before the reconciler starts, the gateway checks the first and the last port of the range. For each
@@ -485,18 +509,19 @@ $HYDRA_STATE_DIR/
   | `hydra/live-grant/v1` | HMAC of live grant cookie values and live tickets |
   | `hydra/agent-token/v1` | HMAC of agent tokens |
   | `hydra/neko/v1` | Derivation of Neko passwords |
+  | `hydra/vault/v1` | AES-256-GCM key of the vault values (section 6.9) |
 
 - `hydra keygen` prints a new random 32-byte key in base64.
 - **Caution:** if the operator loses `HYDRA_SECRET_KEY`, all passwords, tokens, and login sessions
-  become invalid. The operator must keep a copy of the key in a secret store.
+  become invalid, and all vaults are lost. The operator must keep a copy of the key in a secret store.
 - Known limit of v1: there is no key rotation command.
 
 ### 6.2 Database rules
 
 - Drizzle with parameterized queries only. No SQL from string concatenation.
 - `PRAGMA foreign_keys = ON`, `journal_mode = WAL`, `busy_timeout = 5000`.
-- The database stores no secret in plain text. It stores HMACs of tokens and cookie values, and
-  Argon2id hashes of passwords.
+- The database stores no secret in plain text. It stores HMACs of tokens and cookie values,
+  Argon2id hashes of passwords, and AES-256-GCM ciphertext of vault values (section 6.9).
 
 ### 6.3 Users
 
@@ -557,6 +582,7 @@ Session roles: `owner` (the creator, stored on the session row), `operator`, `vi
 | Action (`access/` constant) | Viewer | Operator | Owner | Admin |
 |---|---|---|---|---|
 | `session.read` (see it and its metadata) | ✓ | ✓ | ✓ | ✓ |
+| `vault.read` (credential metadata: name, website, username, which values are set) | ✓ | ✓ | ✓ | ✓ |
 | `live.watch` | ✓ | ✓ | ✓ | ✓ |
 | `live.control` | – | ✓ | ✓ | ✓ |
 | `session.lifecycle` (start, stop, restart) | – | ✓ | ✓ | ✓ |
@@ -567,6 +593,8 @@ Session roles: `owner` (the creator, stored on the session row), `operator`, `vi
 | `session.update` (name, allowlist, locale, screen) | – | – | ✓ | ✓ |
 | `session.share` | – | – | ✓ | ✓ |
 | `session.delete` | – | – | ✓ | ✓ |
+| `vault.manage` (create, update, delete credentials) | – | – | ✓ | ✓ |
+| `vault.reveal` (see a password or a current TOTP code) | – | – | ✓ | ✓ |
 
 - `authorize(user, session, action)` is the only place that applies this table. All routes call it.
   A table-driven unit test checks each cell.
@@ -626,6 +654,95 @@ Session roles: `owner` (the creator, stored on the session row), `operator`, `vi
   headers that the pod sends, and sets these headers (section 9.3).
 - Both origins: `Strict-Transport-Security: max-age=31536000`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: no-referrer`.
+
+### 6.9 Secrets vault
+
+Each session has one vault. The vault keeps credentials that an agent can fill into the pages of that
+session (section 8.8). Only the gateway can decrypt the values.
+
+#### 6.9.1 Credentials
+
+| Field | Rules |
+|---|---|
+| `name` | Necessary. 1 to 64 characters. For example "Google - Catalina". |
+| `website` | Necessary. A URL. If the input has no scheme, the gateway adds `https://`. The gateway stores only the origin, for example `https://www.google.com`. The scheme must be `https`. `http` is permitted only if the hostname is in `HYDRA_VAULT_HTTP_HOSTS` (section 4). A URL with a user name or a password is rejected. |
+| `username` | Optional. 1 to 256 characters. The dashboard shows it with the label "Login". |
+| `password` | Optional. 1 to 1,024 characters. |
+| `totp` | Optional. The TOTP secret and its parameters (below). |
+
+- A credential must have one or more of `username`, `password`, and `totp`.
+- **TOTP input.** The user gives one of these:
+  - An `otpauth://totp/…` URI. The gateway reads `secret`, `algorithm`, `digits`, and `period` from it.
+    Other parameters (`issuer`, the label) are ignored.
+  - A base32 secret, plus optional `algorithm`, `digits`, and `period`. The gateway removes spaces and
+    `=` and changes the secret to uppercase.
+  - Defaults: `SHA1`, 6 digits, 30 s. Permitted values: `SHA1`, `SHA256`, `SHA512`; 6 or 8 digits;
+    30 or 60 s. The secret must have 16 to 128 base32 characters (80 bits or more).
+  - An `otpauth://hotp/…` URI, another URI kind, or a value that is not valid gives 400
+    `validation_failed`.
+- A session has a maximum of 50 credentials. Over the limit: 409 `vault_limit_reached`.
+- The Delete action of a session deletes the credentials of the session in the same DB transaction
+  (section 7.9).
+
+#### 6.9.2 Site match
+
+A fill works only on the site of the credential. The gateway calculates the match from the hostname
+of `website` at each use. It does not store the match, so a change of the public suffix list in the
+code also applies to existing credentials.
+
+- If the hostname is an IP address, or has no registrable domain (it is a public suffix or one label):
+  `matchDomain` = the hostname, `matchSubdomains = false`.
+- Else: `matchDomain` = the registrable domain, from `config/public-suffix.ts` (ICANN and PRIVATE
+  sections), `matchSubdomains = true`.
+- A URL matches if its scheme is equal to the scheme of `website`, and its hostname is equal to
+  `matchDomain`, or `matchSubdomains` is true and the hostname ends with `.` + `matchDomain`. The port
+  is not checked.
+- Examples: `https://www.google.com` matches `https://accounts.google.com`. It does not match
+  `http://accounts.google.com` or `https://google.com.evil.example`. `https://alice.github.io`
+  matches only `alice.github.io` and its subdomains, because `github.io` is in the PRIVATE section.
+- `vaultSiteMatches(url, match)` in `@hydra/shared` is the only implementation. The gateway and the
+  sidecar use it.
+- The gateway checks the `http` rule of section 6.9.1 again at each fill. If the scheme of `website`
+  is `http` and its hostname is no longer in `HYDRA_VAULT_HTTP_HOSTS`, the fill fails (section 8.8.2).
+  The credential stays in the vault.
+
+#### 6.9.3 Encryption
+
+- AES-256-GCM with the subkey `vault` (section 6.1). One ciphertext for each value: version byte
+  `0x01`, 12-byte random nonce, ciphertext, 16-byte tag. Each write uses a new random nonce.
+- Additional authenticated data: `<sid>|<credential id>|<field>`, with `field` in `username`, `password`,
+  `totp`. Thus a person who can write to the DB cannot move a ciphertext to a different credential,
+  field, or session.
+- The plain text of `totp` is the JSON `{ secret, algorithm, digits, period }`.
+- If a decryption fails (for example, a different `HYDRA_SECRET_KEY`), the request gets 500 `internal`.
+  The gateway logs the credential ID, never a value.
+- Decrypted values stay in memory only for one request, and in the redaction sets of section 8.9.
+  They never go to logs, audit events, or error messages.
+- DB backups (section 5.1) contain only the ciphertext.
+- Known limit of v1: no rotation of the vault key (section 6.1).
+
+#### 6.9.4 TOTP
+
+- The gateway calculates the codes with RFC 6238 and `node:crypto`: counter = floor(Unix time in
+  seconds / period), and the dynamic truncation of RFC 4226. No dependency.
+- The codes depend on the clock of the server. The server must synchronize its clock (section 11.5).
+- **Fill:** if the current code is valid for less than 5 s more, the gateway waits until the next
+  period starts, and then uses the new code.
+- **Reveal:** the gateway returns the current code and the time at which it stops being valid.
+- The TOTP secret never leaves the gateway. No API returns it, and the sidecar gets only codes. A user
+  can replace it or remove it.
+
+#### 6.9.5 Rights
+
+- `vault.read`: the credential list. The username is metadata, so each user with `vault.read` sees it.
+  The password and the TOTP secret are never in the list.
+- `vault.manage`: create, update, and delete credentials.
+- `vault.reveal`: get one password or one current TOTP code. Each reveal creates the audit event
+  `vault.revealed`. If an admin reveals a value of a session that the admin does not own, the gateway
+  also records `admin.session_access` (section 6.5).
+- **Fill:** each valid agent token of the session (section 6.6) can fill. The gateway does not check
+  a vault right of the token creator. Thus an operator can get vault values through an agent (section
+  8.7).
 
 ---
 
@@ -718,9 +835,11 @@ the live proxy use it.
   - Readiness probe: HTTP `GET /health` on port 8080 (verify the path in the pinned Neko version).
 - **Container `mcp`** (`HYDRA_MCP_IMAGE`):
   - Non-root, `readOnlyRootFilesystem: true`, drop all capabilities, `emptyDir` for `/tmp`.
-  - Command: `playwright-mcp --cdp-endpoint http://127.0.0.1:9222 --host 0.0.0.0 --port 8931`.
-  - The default host check of Playwright MCP accepts `localhost`. The gateway sets
-    `Host: localhost:8931` (section 8.2), so no `--allowed-hosts` flag is necessary.
+  - Command: `hydra-mcp --cdp-endpoint http://127.0.0.1:9222 --host 0.0.0.0 --port 8931`. `hydra-mcp` is
+    the program of `@hydra/mcp-sidecar` (section 8.8). It embeds Playwright MCP and serves the same MCP
+    endpoint `/mcp`.
+  - The sidecar accepts only requests with `Host: localhost:8931`, as the default host check of
+    Playwright MCP does. The gateway sets this header (section 8.2).
   - Do not use `--allowed-origins` or `--blocked-origins`. They are not a security boundary, they do not
     affect redirects, and they also block the requests of the human. The Chromium policy is the control.
   - Readiness probe: TCP on port 8931.
@@ -737,7 +856,7 @@ session settings. Start from the Neko default policies and apply these changes:
 | `DeveloperToolsAvailability` | `1` | Neko default `2` also blocks CDP |
 | `URLBlocklist` | `["*"]` | Domain allowlist |
 | `URLAllowlist` | session allowlist entries, plus `about:blank` | Domain allowlist |
-| `PasswordManagerEnabled` | `false` | The profile keeps no saved passwords |
+| `PasswordManagerEnabled` | `false` | The profile keeps no saved passwords. The vault (section 6.9) is in the gateway, not in the profile. |
 | `DefaultCookiesSetting` | `1` | Logins stay after a restart |
 | `RestoreOnStartup` | `1` | Chromium tabs stay after a restart |
 | `DiskCacheSize` | `536870912` (512 MiB) | `local-path` does not limit the profile size (section 5.2) |
@@ -767,8 +886,8 @@ Section 11.1 gives the build files and the base images.
 - **`hydra-session`**: the Neko Chromium image plus a normal font set (`fonts-noto`, `fonts-noto-cjk`,
   `fonts-noto-color-emoji`, `fonts-liberation`, `fonts-dejavu`). If spike S1 succeeds, the image also
   replaces the supervisord Chromium file so that Chromium starts without `--no-sandbox`.
-- **`hydra-mcp`**: Playwright MCP, installed from the lockfile (section 3.4.4). No browser download: the
-  sidecar connects over CDP only.
+- **`hydra-mcp`**: the `@hydra/mcp-sidecar` program with Playwright MCP, installed from the lockfile
+  (section 3.4.4). No browser download: the sidecar connects over CDP only.
 - Do not use the `neko/google-chrome` image. It uses the default user data folder, and Google Chrome
   136+ refuses `--remote-debugging-port` with the default folder.
 
@@ -794,7 +913,7 @@ The DB keeps `desired_state` (`running`, `stopped`, `deleted`). Kubernetes keeps
 | Start | `session.lifecycle` | If `state` is `starting` or `running`: no change. If `state` is not `stopped` or `error`: 409 `invalid_state`. Else, in one DB transaction: if the session holds no media port and the number of sessions that hold one is `HYDRA_MAX_RUNNING` or more, 409 `capacity_reached`. Else assign a media port if the session holds none (section 7.8), copy the settings to `applied_settings`, and set `started_at = now`, `ready_at = NULL`, `error_reason = NULL`, and `desired_state = running`. |
 | Stop | `session.lifecycle` | If `state` is `deleting` or `deleted`: 409 `invalid_state`. Else set `desired_state = stopped`. |
 | Restart | `session.lifecycle` | If `state` is not `starting` or `running`: 409 `invalid_state` (use Start). Else copy the settings to `applied_settings`, and set `started_at = now` and `ready_at = NULL`. The new `hydra/started-at` annotation changes the pod template, so the StatefulSet replaces the pod. The media port does not change. |
-| Delete | `session.delete` | The request body must contain the exact session name, else 400 `confirm_mismatch`. Set `desired_state = deleted`, and revoke all tokens of the session. |
+| Delete | `session.delete` | The request body must contain the exact session name, else 400 `confirm_mismatch`. In one DB transaction: set `desired_state = deleted`, revoke all tokens of the session, and delete its vault credentials (section 6.9). |
 
 The reconciler runs at gateway start, after each action above, on each Kubernetes watch event in
 `hydra-sessions`, and every 30 s. For each session, one pass has two steps.
@@ -843,7 +962,9 @@ and errors use the same code, also when a session goes to `stopped` without `sto
 Neko starts Chromium with `--no-sandbox`. A renderer exploit then runs code in the `neko` container.
 
 - **The attacker gets:** the profile of that session (cookies, logins), its Neko passwords, CDP and MCP
-  of that session through `localhost`, and internet access.
+  of that session through `localhost`, and internet access. The attacker also gets each vault value that
+  the gateway sends for a fill while the attacker controls the pod (section 8.8), and the values that
+  are already in the pages. The attacker does not get the other vault values or the TOTP secrets.
 - **The attacker can also attack the people who watch the session.** The attacker can replace the Neko
   server in the pod and send JavaScript to the live view. All sessions share the live origin (section
   9.1). If the same person watches a second session at the same time, this code can use the live grant
@@ -877,17 +998,19 @@ v1 does not support the old SSE transport (`/sse`).
    `{"jsonrpc":"2.0","error":{"code":-32000,"message":"Session is not running. Start it in the dashboard."},"id":null}`.
 3. **Limits.** The token rate limit of section 6.6 (429 `rate_limited`). Maximum body 1 MiB (413).
 4. **Inspect.** Parse the JSON-RPC body (single message or batch). If a `tools/call` names a tool in the
-   deny list (section 8.7), answer with a JSON-RPC error and do not send the call to the pod. Create
-   audit records (section 8.6).
+   deny list (section 8.7), answer with a JSON-RPC error and do not send the call to the pod. Handle
+   the calls of `vault_list` and `vault_fill` (section 8.8). Create audit records (section 8.6).
 5. **Proxy** with `undici` to `podEndpoint(sid, 8931)` + `/mcp` (section 7.3):
    - Remove `Authorization`, `Cookie`, and hop-by-hop headers.
    - Set `Host: localhost:8931`.
    - Send `Mcp-Session-Id`, `Accept`, `Content-Type`, and `MCP-Protocol-Version` without changes.
 6. **Response.** The response can be `application/json` or `text/event-stream`. Send it to the client
-   immediately, without a buffer, and without a timeout on open MCP streams. Read a copy of the response
-   to complete the audit records.
-7. **Pod restart.** Playwright MCP keeps MCP sessions in memory. After a restart it returns 404 for old
-   `Mcp-Session-Id` values. The gateway sends this 404 without changes, and the client must initialize
+   immediately, without a buffer, and without a timeout on open MCP streams. Exception: if the vault of
+   the session is not empty, the gateway first removes the vault values (section 8.9). Then it sends a
+   JSON body when the body is complete, and each SSE event when the event is complete. Then read a copy
+   of the response to complete the audit records.
+7. **Pod restart.** The sidecar keeps MCP sessions in memory. After a restart, or after a new CDP
+   connection (section 8.8.3), it returns 404 for old `Mcp-Session-Id` values. The gateway sends this 404 without changes, and the client must initialize
    again (MCP specification).
 
 ### 8.3 Stream registry and connection check
@@ -941,7 +1064,10 @@ the `mcp.*` events:
   - Text values of typing tools (`browser_type` `text`, `browser_fill_form` field values) become
     `"[redacted: N chars]"`.
   - Code of `browser_evaluate` is kept.
+  - The arguments of `vault_list` and `vault_fill` are kept. They contain no vault value. The audit
+    record of `vault_fill` contains the arguments of the agent, never the rewritten call of section 8.8.
   - Each string is cut to 2,000 characters, and the full `arguments` object to 8 KiB.
+- The error text of a `mcp.tool_call` comes from the response after the redaction of section 8.9.
 - The redaction rules are in one table in `audit/redaction.ts`, with a unit test for each tool.
   Read the current tool list of the pinned Playwright MCP version when you write this table.
 - The gateway does not record disconnects. Many MCP clients never send `DELETE`, so the dashboard uses
@@ -961,6 +1087,153 @@ the `mcp.*` events:
   section 8.2 step 4). The v1 list contains the tools that run code in the MCP server process instead
   of the page, for example `browser_run_code`. Read the tool list of the pinned Playwright MCP version
   when you write the list.
+- **The vault protects against accidental exposure, not against a malicious agent.** After a fill, the
+  value is in the page. An agent can read it with `browser_evaluate` and change its form (for example
+  base64), so the redaction of section 8.9 does not find it. Each agent token of the session can fill
+  (section 6.9.5). Thus an operator can get vault values through an agent, also if the dashboard does
+  not reveal them to operators. Screenshots are not redacted, so a visible username or TOTP code can be in
+  a screenshot.
+
+### 8.8 Vault tools
+
+#### 8.8.1 Tools for the agent
+
+The sidecar lists two tools in each `tools/list` result. The gateway does not change `tools/list`
+results, except for the redaction of section 8.9.
+
+| Tool | Description (text of the tool definition) |
+|---|---|
+| `vault_list` | "List the credentials in the Hydra vault of this session: ID, name, website, and the values that are set. This tool never shows the values." No arguments. |
+| `vault_fill` | "Fill one value of a vault credential into an editable element. You do not see the value. Get the credential ID from vault_list and the target from a page snapshot. The element must be on the website of the credential." |
+
+Arguments of `vault_fill` (zod schema in `@hydra/shared`):
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `credentialId` | string, necessary | ID from `vault_list` |
+| `field` | `username`, `password`, or `totp`, necessary | The value to fill. `totp` fills the current code. |
+| `target` | string, necessary | A ref from the newest snapshot, in the Playwright MCP format (`e12`, `f1e5`). CSS selectors are not accepted. |
+| `element` | string, optional | A description of the element, as in Playwright MCP |
+| `submit` | boolean, optional | Press Enter after the fill |
+| `slowly` | boolean, optional | Type one character at a time. For code fields with one box for each digit. |
+
+#### 8.8.2 Gateway (section 8.2 step 4)
+
+1. If a batch contains a `tools/call` of `vault_list` or `vault_fill`, the gateway rejects the batch
+   with a JSON-RPC error: "Batch rejected, because it contains a vault tool call. Send vault tool calls
+   one at a time."
+2. **`vault_list`:** the gateway answers the call itself (200, `application/json`) and does not send
+   it to the pod. The result text has one line for each credential:
+   `- <id> · <name> · <website> · values: username, password, totp` (only the values that are set). If the
+   vault is empty: "The vault of this session is empty. A person adds credentials in the Vault view of
+   the dashboard." The gateway writes the `mcp.tool_call` record with `status = ok`.
+3. **`vault_fill`:**
+   1. Remove the key `hydraFill` from the arguments of the agent. Only the gateway sets it.
+   2. Write the `pending` audit record with the arguments of the agent (section 8.6).
+   3. Validate the arguments with the zod schema.
+   4. Read the credential from the vault of the session of the token. Check the `http` rule (section
+      6.9.2). Get the value: decrypt it, or calculate the TOTP code (section 6.9.4).
+   5. Add `hydraFill: { value, scheme, matchDomain, matchSubdomains }` to the arguments (section
+      6.9.2), and send the changed message to the pod with the same JSON-RPC ID. The body limit of
+      section 8.2 step 3 applies to the body of the agent, not to the changed body.
+   6. The gateway never logs the changed body.
+   - If step 3 fails, if the credential does not exist, if the `http` rule fails, or if the value is
+     not set, the gateway answers with a tool result with `isError: true`, sets the audit record to
+     `error`, and does not send the call to the pod. The texts are: "The arguments of vault_fill are not
+     valid: <zod message>", "Credential <id> does not exist in this session. Call vault_list.",
+     "Credential <id> uses http, and http is not permitted for <hostname>.", and "Credential <id> has no
+     <field>."
+
+#### 8.8.3 Sidecar (`hydra-mcp`)
+
+**Process:**
+
+- At start, the sidecar connects to Chromium with `chromium.connectOverCDP(<cdp endpoint>)` of
+  `playwright`, and uses the first browser context. The `neko` container starts at the same time, so
+  Chromium can be not ready. If the connection fails, the sidecar tries again every 1 s. It opens port
+  8931 only after it connects, so the TCP readiness probe (section 7.4) passes only when the sidecar can
+  serve.
+- If the CDP connection closes later (for example, Chromium restarts), the sidecar ends all MCP
+  sessions, connects again with the same retry rule, and then accepts new MCP sessions. It does not
+  stop the process. A stop would restart the container, and repeated restarts give `CrashLoopBackOff`,
+  which sets the session to `error` (section 7.9 rule 3). While the sidecar is not connected, it
+  answers each MCP request with 503.
+- The sidecar serves Streamable HTTP on `/mcp` with the MCP TypeScript SDK. Each `initialize` creates
+  one MCP session with its own `Mcp-Session-Id`. A request with an unknown `Mcp-Session-Id` gets 404,
+  also after the sidecar ended the MCP sessions. MCP clients then initialize again (section 8.2 step 7).
+  `DELETE` ends an MCP session. For each MCP session, the sidecar calls
+  `createConnection(config, () => context)` of `@playwright/mcp`. All MCP sessions share the browser
+  context and the Chromium tabs (section 8.4). The `config` gives the same tools and defaults as the
+  `playwright-mcp` command line did (spike V2).
+- For each MCP session, an interceptor is between the HTTP transport and the Playwright MCP server.
+  The interceptor:
+  - adds the definitions of `vault_list` and `vault_fill` to each `tools/list` result, and removes
+    other tools with these names (a page can register WebMCP tools, and Playwright MCP lists them);
+  - handles each `vault_fill` call itself, and never sends a `vault_fill` call to Playwright MCP;
+  - answers a `vault_list` call with `isError: true`: "vault_list works only through the Hydra gateway.";
+  - sends its own requests to Playwright MCP with JSON-RPC IDs that start with `hydra-internal-`, and
+    does not send their responses to the client. It rejects client requests with such an ID.
+
+**Fill steps:**
+
+1. If the arguments have no valid `hydraFill`: `isError` "vault_fill works only through the Hydra
+   gateway."
+2. **Current tab.** Send `browser_tabs` with `action: "list"` to Playwright MCP, read the index of the
+   current tab, and use `context.pages()[index]`. If the URL of that page is not equal to the URL in the
+   list: `isError` "Cannot find the current tab. Take a new snapshot and try again." (spike V1).
+3. **Element.** `target` must match `^(f\d+)?e\d+$`. Get an element handle for the locator
+   `aria-ref=<target>` on that page (timeout 5 s). If there is no element: `isError` "Ref <target> is not
+   in the current page snapshot. Take a new snapshot."
+4. **Site check.** Get the frame of the element (`ownerFrame()`) and its URL (`frame.url()`). The
+   browser gives this URL, so the JavaScript of the page cannot change it. The URL must match with
+   `vaultSiteMatches` (section 6.9.2). `about:blank`, `about:srcdoc`, `data:`, and `blob:` URLs do not
+   match. If it does not match: `isError` "The element is on <origin>. Credential <id> fills only on
+   <matchDomain>[ and its subdomains]."
+5. **Field check.** The element must be an `input` with type `""`, `text`, `email`, `password`,
+   `search`, `tel`, `number`, or `url`, or a `textarea`. It must not be disabled or read-only. Else:
+   `isError` "The element is not an editable text field."
+6. **Fill** with the element handle: replace the value, or if `slowly` is true, focus the element and
+   type one key at a time. If `submit` is true, press Enter. The handle belongs to one document. If the
+   frame goes to a different document after step 4, the fill fails, and no value goes to the new
+   document.
+7. **Result:** "Filled the <field> of credential <credentialId> into <element, or target>." If `submit`
+   is true, add " Pressed Enter." The result has no snapshot. The agent calls `browser_snapshot`.
+
+- In each error text, the sidecar replaces the value with `[vault:<credentialId>.<field>]`.
+- The sidecar never logs the arguments of `vault_fill`, and keeps no vault value after the call.
+
+### 8.9 Response redaction
+
+Playwright MCP puts the value of each `input` into the snapshot, also for `type=password` (aria
+snapshot of `playwright-core` `1.64.0-alpha-1790635538000`). Thus after a fill, a snapshot shows the
+value. Pages can also show a value, for example "Signed in as <username>". The gateway removes the vault
+values from each MCP response of a session whose vault is not empty.
+
+- **Redaction set** of a session. For each credential:
+  - the username and the password, if they have 4 characters or more;
+  - for a credential with TOTP: the codes of the previous, the current, and the next period.
+- Each value becomes `[vault:<credentialId>.<field>]`. The gateway replaces the value in two forms: as
+  it is, and in its JSON string form without the quotes (`JSON.stringify(value)` without the first and
+  the last character), because snapshot text puts some values in quotes. Longer values go first.
+- **Where:** in each JSON-RPC message from the pod. The gateway parses the message, replaces the values
+  in each string in `result`, `error`, and `params`, and serializes it again. It does not change
+  `jsonrpc`, `id`, or `method`, and it does not change the `data` field of `image` and `audio` content
+  items. If a message is not valid JSON, the gateway replaces the values in the raw text.
+- **`application/json`:** the gateway reads the full body (maximum 64 MiB), changes it,
+  and sends it without `Content-Length`. **`text/event-stream`:** the gateway changes each SSE event when
+  the event is complete. It keeps only the incomplete event in a buffer, so the stream has no other
+  delay.
+- The audit copy of section 8.2 step 6 reads the response after the redaction.
+- **Cache:** the `vault/` module keeps the redaction set of a session in memory. It builds the set at
+  the first response, and removes it when a credential of the session changes, when the session state
+  changes to a state other than `starting` or `running`, and after 10 min without use. It calculates
+  the TOTP codes at each use. Each message uses the current set.
+- **Limits:**
+  - Screenshots and other images do not change.
+  - A changed form of a value (base64, reversed, in parts) is not found.
+  - A value with less than 4 characters is not removed.
+  - A short or common value (for example the username `admin`) also replaces the same text in other
+    places of the page.
 
 ---
 
@@ -1079,8 +1352,8 @@ system colors.
     language, screen, "Start now").
   - "Admin" (admins only): **Users**, **All sessions**.
   - User menu at the bottom: change password, logout.
-- **Toolbar:** session name and state, a segmented control for the views (**Live · Tokens · Sharing ·
-  Activity · Settings**, only the views that the user has rights for), **Start**/**Stop**, **Restart**,
+- **Toolbar:** session name and state, a segmented control for the views (**Live · Tokens · Vault ·
+  Sharing · Activity · Settings**, only the views that the user has rights for), **Start**/**Stop**, **Restart**,
   and a "more" menu with **Delete** (a sheet in which the user types the session name).
 - **Live:** the iframe, fitted to the space with the screen aspect ratio. A status bar under it shows the
   number of connected agents, the last tool call (for example `browser_click · ok · 230 ms`), and the
@@ -1091,6 +1364,24 @@ system colors.
   with copy buttons for:
   - `claude mcp add --transport http <name> <HYDRA_PUBLIC_URL>/s/<sid>/mcp --header "Authorization: Bearer <token>"`
   - the JSON `mcpServers` config for other clients.
+- **Vault** (right `vault.read`, in all session states):
+  - A table: name, website, username, the values that are set (password and 2FA icons), updated. Users with
+    `vault.manage` also see **New credential**. An empty vault shows a short text about the vault and
+    the `vault_fill` tool.
+  - A click on a row opens the credential sheet: name, username, password, website, and two-factor code.
+    The password and the code show as dots. The website opens in a new browser tab of the local
+    browser, not in the session.
+  - Users with `vault.reveal` see an eye button and a copy button for the password and the code. Each
+    click calls the reveal route (one audit event). The password stays visible until the user hides
+    it or closes the sheet. The code shows with a ring that counts down to the end of its period, and
+    then it hides. The copy button writes the value to the local clipboard. Neko clipboard sync then
+    lets the user paste it into the live view.
+  - Users with `vault.manage` see **Edit** and **Delete** in the sheet. The edit sheet shows the
+    password and the TOTP secret as empty fields with the placeholder "Unchanged", and a **Remove**
+    button for each optional value. **Delete** asks for a confirmation.
+  - The **New credential** sheet asks for the name, the website, the username, the password, and the
+    two-factor secret (base32 or `otpauth://` URI). An **Advanced** part gives the algorithm, the
+    digits, and the period. If the user pastes a URI, the form shows its parameters in **Advanced**.
 - **Sharing:** the owner and the members, with a role menu (`viewer`, `operator`) and **Remove** for
   each member. Add a member by email.
 - **Activity:** the audit table with live updates and filters (kind, tool, status, token). Click a row to
@@ -1195,6 +1486,8 @@ The excluded ranges contain the pod CIDR, the service CIDR, the VPC addresses (n
 - A persistent volume mounted at `HYDRA_STATE_DIR`, with daily snapshots (for example EBS snapshots).
   The `backups/` folder (section 5.1) is on the same volume, so it does not replace the snapshots.
 - An alarm when the volume is 80% full (section 5.2).
+- Clock synchronization on the server (for example chrony with the Amazon Time Sync Service). TOTP
+  codes of the vault depend on the clock (section 6.9.4).
 
 ### 11.6 `scripts/setup-k3s.sh`
 
@@ -1305,6 +1598,11 @@ All dashboard routes are under `/api` on `HYDRA_PUBLIC_URL`, use JSON, and need 
 | `POST /api/sessions/:sid/tokens` | `token.create` | Create (`name`, `expiresInDays`), returns the token one time |
 | `DELETE /api/sessions/:sid/tokens/:tokenId` | `token.revoke_own` or `token.revoke_any` | Revoke |
 | `GET /api/sessions/:sid/audit` | `audit.read` | Filters: `kind`, `tool`, `status`, `tokenId`, `before`, `limit` (max 200) |
+| `GET /api/sessions/:sid/vault` | `vault.read` | List credentials (metadata, section 6.9.5) |
+| `POST /api/sessions/:sid/vault` | `vault.manage` | Create (`name`, `website`, `username`, `password`, `totp`) |
+| `PATCH /api/sessions/:sid/vault/:credentialId` | `vault.manage` | Change. A missing key keeps the value, `null` removes an optional value, a new value replaces it. |
+| `DELETE /api/sessions/:sid/vault/:credentialId` | `vault.manage` | Delete |
+| `POST /api/sessions/:sid/vault/:credentialId/reveal` | `vault.reveal` | `field`: `password` or `totp`. Returns the password, or the current code with `validUntil`. `Cache-Control: no-store`. |
 | `POST/GET/DELETE /s/:sid/mcp` | agent token | MCP endpoint (section 8) |
 | `/s/:sid/*` on the live host (HTTP and WebSocket) | live grant | Neko proxy (section 9) |
 | `GET /healthz`, `GET /readyz` | — | Health |
@@ -1329,6 +1627,7 @@ Format: `{ "error": { "code": "<code>", "message": "<text for people>", "fields"
 | `conflict` | 409 | For example, the email exists |
 | `invalid_state` | 409 | The action does not fit the session state, for example a start during `deleting`, or a live ticket for a session that is not running |
 | `capacity_reached` | 409 | `HYDRA_MAX_RUNNING` sessions hold a media port (section 7.8) |
+| `vault_limit_reached` | 409 | The vault of the session has 50 credentials (section 6.9.1) |
 | `body_too_large` | 413 | The request body is larger than the body limit |
 | `internal` | 500 | An unexpected error. The message gives no details. The gateway logs the error. |
 
@@ -1365,6 +1664,11 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
 **`live_grants`**: `id` PK, `login_session_id` FK → login_sessions (cascade), `user_id`, `session_id`,
 `neko_profile` (`admin` | `user`), `cookie_hmac` BLOB UNIQUE, `created_at`, `expires_at`.
 
+**`vault_credentials`**: `id` PK, `session_id` FK → sessions, `name`, `website` (origin),
+`username_enc` BLOB NULL, `password_enc` BLOB NULL, `totp_enc` BLOB NULL (section 6.9.3), `created_by`
+FK → users, `created_at`, `updated_at`. Index on `session_id`. A CHECK constraint makes sure that one or
+more of the three `_enc` columns is not null.
+
 **`audit_events`**: `id` INTEGER PK AUTOINCREMENT, `ts`, `kind`, `actor_type` (`user` | `token` |
 `system`), `actor_id` NULL, `session_id` NULL, `status` NULL, `data` JSON. Indexes:
 (`session_id`, `ts`), (`kind`, `ts`).
@@ -1375,7 +1679,12 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
 `user.updated` (also an unlock), `user.password_reset`, `session.created`, `session.updated`,
 `session.state`, `session.started`, `session.stopped`, `session.restarted`, `session.deleted`,
 `session.shared`, `session.unshared`, `live.opened`, `token.created`, `token.revoked`,
-`admin.session_access`, `mcp.connect`, `mcp.tool_call`.
+`admin.session_access`, `mcp.connect`, `mcp.tool_call`, `vault.created`, `vault.updated`,
+`vault.deleted`, `vault.revealed`.
+
+Data of the vault events: `credentialId` and `name` for all four. `vault.created` also has `website`
+and the names of the values that are set. `vault.updated` has the names of the changed fields.
+`vault.revealed` has `field`. No vault event contains a value.
 
 ### 13.3 Jobs
 
@@ -1389,7 +1698,8 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
 ## 14. Errors and operations
 
 - **Logs:** pino JSON to stdout. Redact paths: `req.headers.authorization`, `req.headers.cookie`,
-  `res.headers["set-cookie"]`, and all fields named `password`, `token`, `ticket`.
+  `res.headers["set-cookie"]`, and all fields named `password`, `token`, `ticket`, `username`, `value`,
+  `secret`, `totp`, `uri`, and `hydraFill`. The gateway never logs a TOTP code.
 - **Health:** `/healthz` returns 200 if the process runs. `/readyz` returns 200 if the DB answers and
   the Kubernetes API answers.
 - **SIGTERM:** stop new requests, close open MCP streams and WebSockets after 10 s, close the DB.
@@ -1412,6 +1722,19 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
 - `orchestrator/`: manifest builders (snapshot tests of the generated objects), the state rules, and the
   repair of missing or changed objects (with a fake client).
 - `config/`: validation rules.
+- `vault/`: encryption round trip; a ciphertext with a different `sid`, credential ID, or field fails;
+  the RFC 6238 test vectors (SHA1, SHA256, SHA512); the 5 s rule of a fill; the redaction set and the
+  two replacement forms.
+- `@hydra/shared`: `otpauth://` URI parse (valid, `hotp`, bad parameters), base32 rules, and
+  `vaultSiteMatches` (subdomains, a different scheme, an IP address, a public suffix, a PRIVATE-section
+  host, `about:blank`).
+- `mcp-proxy/`: the `vault_fill` rewrite (the `hydraFill` of the agent is removed, the audit record has
+  no value), the batch rule, the `http` rule at fill time, and the redaction of JSON bodies and of SSE
+  events that arrive in parts (a JSON-RPC `id` does not change).
+- `@hydra/mcp-sidecar`: the interceptor (the tool list gets the vault tools and loses the page tools
+  with the same names, `vault_fill` never reaches Playwright MCP, `hydra-internal-` IDs from the client
+  are rejected), the error texts contain no value, and the CDP retry: no listen on 8931 before the
+  first connection, 404 for old MCP sessions after a new connection, and no process exit.
 
 ### 15.2 Integration (Vitest)
 
@@ -1423,15 +1746,30 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
 - Rights change: a downgrade from operator to viewer ends the live grant, and a member removal closes
   the MCP streams of the tokens of that member.
 - `agentActivity`: a viewer gets the summary, but `GET /api/sessions/:sid/audit` returns 403.
-- MCP proxy against a real `@playwright/mcp` process that connects to a local Chromium over CDP:
-  responses without a buffer, header removal, `Host` rewrite, audit records, MCP stream close on revoke,
+- MCP proxy against a real `hydra-mcp` sidecar process that connects to a local Chromium over CDP:
+  responses without a buffer (with an empty vault), SSE events without delay after they are complete
+  (with a vault that is not empty), header removal, `Host` rewrite, audit records, MCP stream close on revoke,
   and the tool deny list.
+- Vault API: the rights of section 6.9.5 for each role, `vault_limit_reached`, the `null` rule of
+  `PATCH`, a reveal creates `vault.revealed`, no response of the list contains a password or a TOTP
+  secret, and a session Delete removes the credential rows.
+- Vault fill against the real sidecar and a local page:
+  - A fill of the username, the password, and the TOTP code works with snapshot refs, also in a
+    same-site iframe and in a second tab that is the current tab.
+  - A fill into an element of a cross-site iframe, of an `about:srcdoc` frame, or of a page on another
+    site fails with the site check error.
+  - After a fill, `browser_snapshot` and `browser_evaluate` that returns the value give
+    `[vault:<id>.<field>]` to the client, not the value.
+  - No value is in the audit table, in the gateway logs, or in the sidecar logs.
 
 ### 15.3 E2E (`@hydra/e2e`, Playwright, on k3d)
 
 - **Test site:** the egress NetworkPolicy blocks private addresses, so the `dev` overlay deploys a small
   test site (`hydra-testsite`, section 3) and adds one egress exception for it. The test site sets a cookie and
   redirects on request. Only the `dev` overlay has this exception.
+  The test site also has a login page with an email field, a password field, and a 6-digit code field.
+  It accepts one fixed test account and the TOTP codes of one fixed test secret. The test site uses
+  `http`, so the `dev` overlay sets `HYDRA_VAULT_HTTP_HOSTS` to the test site host (section 4).
 - **Main flow:**
   1. Create an admin with the CLI, then log in.
   2. Create a session, and wait for `running`.
@@ -1443,7 +1781,10 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
   7. Check `navigator.language` and the `Intl` timezone against the session settings.
   8. Check the audit log in the Activity view.
   9. Stop the session: MCP returns 503. Start it again: a cookie set in step 6 is still there.
-  10. Delete the session: all its Kubernetes objects and its profile folder are gone.
+  10. In the Vault view, create a credential for the test site with the test account and the test
+      TOTP secret. The agent calls `vault_list` and `vault_fill` for the username, the password, and the
+      code, and the test site login succeeds. No MCP response and no audit event contains a value.
+  11. Delete the session: all its Kubernetes objects, its profile folder, and its credentials are gone.
 - **Security:**
   - From inside a session pod: connections to another session pod, the gateway Service, the node on
     6443 and 10250, and `169.254.169.254` all fail.
@@ -1455,6 +1796,8 @@ BLOB UNIQUE, `prefix`, `created_at`, `expires_at`, `last_used_at` NULL, `last_us
     session ends at once. 30 s after a view closes, its grant cookie gets 401.
   - A user without access gets 404 for the session.
   - The `ip` of the `auth.login` audit event is the client address, not a pod address.
+  - A credential with the website `https://example.com` cannot fill the test site.
+  - An operator and a viewer get 403 on the reveal route.
 - **Long MCP stream:** an MCP stream stays open for 10 min through Traefik. CI runs this test every night
   and on pull requests that change `deploy/traefik/` or `scripts/versions.sh`.
 
@@ -1485,6 +1828,8 @@ spec before the implementation of the related part.
 | S4 | Does the `local-path` provisioner of k3s support `pathPattern`, and does a new PVC with the same name use the existing folder? | Use static PVs with fixed `local` paths, created by the setup script and the orchestrator. |
 | S5 | Do `URLBlocklist`/`URLAllowlist` affect subresources (CDNs), `fetch()` requests, and redirects? Which internal pages must be in the allowlist? | Document the behavior in the UI help text and in section 8.7, and adjust the base policy. |
 | S6 | Does the k3s NetworkPolicy controller block egress to the node IP (6443, 10250)? | Add host firewall rules in `setup-k3s.sh`. |
+| V1 | In the sidecar, does `page.locator('aria-ref=<ref>')` from our code find the element of a ref from the newest Playwright MCP snapshot, if both use the same `BrowserContext`? Does an internal `browser_tabs` `list` call give the current tab, and is its index the index in `context.pages()`? Check refs in iframes (`f1e5`) and with two tabs. | If refs do not resolve: read the Playwright MCP code for a public way to resolve a ref, and update section 8.8. If the tab index does not match: find the page whose newest snapshot has the ref, and fail if more than one page has it. |
+| V2 | Does `createConnection(config, () => context)` give the same tool list (25 default tools of `@playwright/mcp` `0.0.83`) and the same defaults as the `playwright-mcp` command line of section 7.4? The interceptor then adds the two vault tools, so the sidecar lists 27 tools. When an MCP session closes, or an agent calls `browser_close`, do the Chromium tabs and the browser context stay open, as with the command line? | Set the `config` values that give parity. If a session close closes the context, the sidecar gives each connection a wrapper of the context whose `close()` does nothing. Record the result in section 8.8. |
 
 ---
 
@@ -1498,3 +1843,6 @@ spec before the implementation of the related part.
 - More than one node, autoscaling, automatic stop of idle sessions, TURN server
 - A built-in agent chat in the dashboard
 - `HYDRA_SECRET_KEY` rotation, transfer of session ownership, SSO
+- Vault: credentials that more than one session can use, import and export, a QR code reader for TOTP
+  secrets, HOTP and Steam Guard codes, a password strength meter, a password generator, a fill that a
+  person starts from the dashboard, and a vault right for each agent token
