@@ -41,6 +41,13 @@ export const E2E = {
     /** Route that redirects to the absolute URL in the query parameter. */
     redirectPath: '/redirect',
     redirectParam: 'to',
+    /** Route of the login form of the vault step, and its test account (TESTSITE_ACCOUNT of @hydra/testsite). */
+    loginPath: '/login',
+    account: {
+      email: 'agent@testsite.local',
+      password: 'Testsite-Password-1',
+      totpSecret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    },
   },
   /** A domain that no e2e allowlist contains. */
   blockedUrl: 'https://example.com/',

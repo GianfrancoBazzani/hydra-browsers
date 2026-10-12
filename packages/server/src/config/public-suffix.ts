@@ -51,10 +51,13 @@ export function registrableDomain(hostname: string): string | null {
   return labels.slice(labels.length - suffix.split('.').length - 1).join('.');
 }
 
+/** The registrable domain of a URL hostname, or null for an IP address or a public suffix. */
+export function siteDomainOf(hostname: string): string | null {
+  const bare = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
+  return isIP(bare) === 0 ? registrableDomain(hostname) : null;
+}
+
 /** The "site" of an origin (HTML standard): scheme plus registrable domain, or the host itself. */
 export function siteOf(url: URL): string {
-  const host = url.hostname;
-  const bare = host.startsWith('[') ? host.slice(1, -1) : host;
-  const domain = isIP(bare) === 0 ? (registrableDomain(host) ?? host) : host;
-  return `${url.protocol}//${domain}`;
+  return `${url.protocol}//${siteDomainOf(url.hostname) ?? url.hostname}`;
 }

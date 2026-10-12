@@ -74,8 +74,9 @@ describe('openSqlite and migrateDb', () => {
         'session_members',
         'sessions',
         'users',
+        'vault_credentials',
       ]),
     );
-    expect(sqlite.prepare('SELECT count(*) FROM __drizzle_migrations').pluck().get()).toBe(1);
+    expect(sqlite.prepare('SELECT count(*) FROM __drizzle_migrations').pluck().get()).toBe(2);
   });
 });

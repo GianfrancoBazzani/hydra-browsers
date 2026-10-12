@@ -129,7 +129,7 @@ describe('session routes', () => {
     expect(asViewer.statusCode).toBe(200);
     expect(asViewer.json()).toMatchObject({
       myRole: 'viewer',
-      rights: ['session.read', 'live.watch'],
+      rights: ['session.read', 'live.watch', 'vault.read'],
     });
     const stop = await call('POST', `/api/sessions/${id}/stop`, viewer.cookie);
     expect(stop.statusCode).toBe(403);

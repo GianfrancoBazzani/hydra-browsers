@@ -14,6 +14,7 @@ configMapGenerator:
       - HYDRA_PUBLIC_URL=http://hydra.localhost
       - HYDRA_LIVE_URL=http://live.hydra.localhost
       - HYDRA_PUBLIC_IP=127.0.0.1
+      - HYDRA_VAULT_HTTP_HOSTS=testsite.hydra-testsite.svc.cluster.local
 patches:
   - target:
       kind: IngressRoute

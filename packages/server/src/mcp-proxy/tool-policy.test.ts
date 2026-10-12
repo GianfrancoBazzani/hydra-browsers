@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DENIED_TOOL_ERROR_CODE,
   TOOL_DENY_LIST,
-  deniedToolError,
   deniedToolMessage,
   isToolDenied,
 } from './tool-policy.js';
@@ -31,16 +30,8 @@ describe('TOOL_DENY_LIST', () => {
   });
 });
 
-describe('deniedToolError', () => {
-  it('builds a JSON-RPC error with the request id', () => {
-    expect(deniedToolError(5, 'browser_run_code_unsafe')).toEqual({
-      jsonrpc: '2.0',
-      error: {
-        code: DENIED_TOOL_ERROR_CODE,
-        message: deniedToolMessage('browser_run_code_unsafe'),
-      },
-      id: 5,
-    });
+describe('deniedToolMessage', () => {
+  it('uses the invalid params code and names the gateway', () => {
     expect(DENIED_TOOL_ERROR_CODE).toBe(-32602);
     expect(deniedToolMessage('browser_run_code_unsafe')).toContain('blocked by the Hydra gateway');
   });

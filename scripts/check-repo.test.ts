@@ -532,3 +532,39 @@ describe('parseImage', () => {
     expect(parseImage('hydra-gateway')).toEqual({ name: 'hydra-gateway', tag: null, digest: null });
   });
 });
+
+describe('sidecar playwright version (spec section 3.4.7)', () => {
+  const mcpManifest = (playwright: string) =>
+    JSON.stringify({ name: '@playwright/mcp', version: '0.0.83', dependencies: { playwright } });
+  const sidecar = (playwright: string) =>
+    JSON.stringify({
+      name: '@hydra/mcp-sidecar',
+      private: true,
+      dependencies: { '@playwright/mcp': '0.0.83', playwright },
+    });
+  const MCP_PATH =
+    'node_modules/.pnpm/@playwright+mcp@0.0.83/node_modules/@playwright/mcp/package.json';
+
+  it('accepts the playwright version of @playwright/mcp', () => {
+    expect(
+      check({
+        'packages/mcp-sidecar/package.json': sidecar('1.64.0'),
+        [MCP_PATH]: mcpManifest('1.64.0'),
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects another playwright version', () => {
+    expect(
+      check({
+        'packages/mcp-sidecar/package.json': sidecar('1.63.0'),
+        [MCP_PATH]: mcpManifest('1.64.0'),
+      }),
+    ).toEqual([
+      {
+        file: 'packages/mcp-sidecar/package.json',
+        message: 'playwright is 1.63.0, but @playwright/mcp 0.0.83 needs 1.64.0',
+      },
+    ]);
+  });
+});

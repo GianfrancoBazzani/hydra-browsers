@@ -51,6 +51,7 @@ describe('loadConfig', () => {
       defaultTimezone: 'UTC',
       defaultLanguage: 'en-US',
       auditRetentionDays: 90,
+      vaultHttpHosts: [],
       logLevel: 'info',
       port: 8080,
     });
@@ -418,5 +419,25 @@ describe('testConfig', () => {
 
   it('applies overrides', () => {
     expect(testConfig({ maxRunning: 2 }).maxRunning).toBe(2);
+  });
+});
+
+describe('HYDRA_VAULT_HTTP_HOSTS', () => {
+  it('is empty by default', () => {
+    expect(loadConfig(env()).vaultHttpHosts).toEqual([]);
+  });
+
+  it('reads a comma-separated list of hostnames', () => {
+    expect(
+      loadConfig(env({ HYDRA_VAULT_HTTP_HOSTS: ' testsite.local, a.b.c ' })).vaultHttpHosts,
+    ).toEqual(['testsite.local', 'a.b.c']);
+  });
+
+  it('rejects a scheme, a port, a path, or uppercase letters', () => {
+    for (const value of ['http://a.b', 'a.b:80', 'a.b/x', 'A.B']) {
+      expect(configError(env({ HYDRA_VAULT_HTTP_HOSTS: value })).variable).toBe(
+        'HYDRA_VAULT_HTTP_HOSTS',
+      );
+    }
   });
 });

@@ -6,12 +6,14 @@ import type { Logger } from '../lib/logger.js';
 import type { AgentPrincipal } from '../tokens/index.js';
 import {
   idKey,
+  isObject,
   parseServerPayload,
   toolCallArguments,
   toolCallName,
   type JsonRpcErrorObject,
   type JsonRpcMessage,
 } from './jsonrpc.js';
+import { bodyModeOf, type BodyMode } from './redact-stream.js';
 import { SseParser } from './sse.js';
 
 export const MAX_ERROR_CHARS = 500;
@@ -57,10 +59,6 @@ interface PendingCall {
 interface ClientInfo {
   name: string | null;
   version: string | null;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function clientInfoOf(params: unknown): ClientInfo {
@@ -157,7 +155,7 @@ export class McpExchange {
   readonly #calls = new Map<string, PendingCall>();
   readonly #initializes = new Map<string, ClientInfo>();
   readonly #decoder = new TextDecoder('utf-8');
-  #mode: 'sse' | 'json' | 'other' = 'other';
+  #mode: BodyMode = 'other';
   #status = 0;
   #responseSessionId: string | null = null;
   #sse: SseParser | null = null;
@@ -229,18 +227,8 @@ export class McpExchange {
     const sessionHeader = headers['mcp-session-id'];
     this.#responseSessionId = typeof sessionHeader === 'string' ? sessionHeader : null;
     const contentTypeHeader = headers['content-type'];
-    const contentType = (
-      typeof contentTypeHeader === 'string' ? contentTypeHeader : ''
-    ).toLowerCase();
-    const success = status >= 200 && status < 300;
-    if (success && contentType.startsWith('text/event-stream')) {
-      this.#mode = 'sse';
-      this.#sse = new SseParser();
-    } else if (success && contentType.startsWith('application/json')) {
-      this.#mode = 'json';
-    } else {
-      this.#mode = 'other';
-    }
+    this.#mode = bodyModeOf(status, typeof contentTypeHeader === 'string' ? contentTypeHeader : '');
+    if (this.#mode === 'sse') this.#sse = new SseParser();
   }
 
   /** A chunk of the response body. The proxy calls it before the chunk goes to the client. */

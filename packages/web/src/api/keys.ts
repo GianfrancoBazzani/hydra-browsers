@@ -17,6 +17,7 @@ export const queryKeys = {
   session: (sid: string) => ['sessions', 'detail', sid] as const,
   members: (sid: string) => ['sessions', 'members', sid] as const,
   tokens: (sid: string) => ['sessions', 'tokens', sid] as const,
+  vault: (sid: string) => ['sessions', 'vault', sid] as const,
   auditAll: (sid: string) => ['sessions', 'audit', sid] as const,
   audit: (sid: string, filters: AuditFilters) => ['sessions', 'audit', sid, filters] as const,
   logs: (sid: string, container: 'neko' | 'mcp') => ['sessions', 'logs', sid, container] as const,

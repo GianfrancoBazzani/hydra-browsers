@@ -11,6 +11,7 @@ import { registerSessionRoutes } from './api/sessions.js';
 import { closeAllSse } from './api/sse.js';
 import { registerTokenRoutes } from './api/tokens.js';
 import { registerUserRoutes } from './api/users.js';
+import { registerVaultRoutes } from './api/vault.js';
 import type { AuditWriter } from './audit/index.js';
 import { SESSION_COOKIE, checkCsrf, parseCookies, type AuthService } from './auth/index.js';
 import type { Config } from './config/index.js';
@@ -29,6 +30,7 @@ import { SHARED_SECURITY_HEADERS, dashboardHeaders } from './static/headers.js';
 import { registerStatic } from './static/index.js';
 import type { TokensService } from './tokens/index.js';
 import type { UsersService } from './users/index.js';
+import type { VaultService } from './vault/index.js';
 
 /** 1 MiB, the body limit of spec section 8.2. Dashboard bodies are much smaller. */
 export const BODY_LIMIT = 1_048_576;
@@ -58,6 +60,8 @@ export interface AppDeps {
   mcpStreams: StreamRegistry;
   // Plan 06
   live: LiveService;
+  // Secrets vault (spec section 6.9)
+  vault: VaultService;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -111,6 +115,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerSessionRoutes(scope, deps);
     registerEventRoutes(scope, deps);
     registerTokenRoutes(scope, deps);
+    registerVaultRoutes(scope, deps);
     registerAuditRoutes(scope, deps);
     if (deps.webRoot !== null) registerStatic(scope, { root: deps.webRoot });
     registerMcpRoutes(scope, deps); // plan 05

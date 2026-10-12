@@ -1,9 +1,10 @@
 import type { Action } from '@hydra/shared';
 
-/** The five views of a session and the right that each view needs (spec sections 6.5, 10.2). */
+/** The six views of a session and the right that each view needs (spec sections 6.5, 10.2). */
 export const SESSION_VIEWS = [
   { value: 'live', label: 'Live', right: 'live.watch' },
   { value: 'tokens', label: 'Tokens', right: 'token.create' },
+  { value: 'vault', label: 'Vault', right: 'vault.read' },
   { value: 'sharing', label: 'Sharing', right: 'session.read' },
   { value: 'activity', label: 'Activity', right: 'audit.read' },
   { value: 'settings', label: 'Settings', right: 'session.read' },

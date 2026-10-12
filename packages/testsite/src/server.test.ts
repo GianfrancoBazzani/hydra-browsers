@@ -1,7 +1,13 @@
+import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { connect, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COOKIE_MAX_AGE_SECONDS, COOKIE_NAME, createTestsiteServer } from './server.js';
+import {
+  COOKIE_MAX_AGE_SECONDS,
+  COOKIE_NAME,
+  TESTSITE_ACCOUNT,
+  createTestsiteServer,
+} from './server.js';
 
 const server = createTestsiteServer();
 let baseUrl = '';
@@ -108,5 +114,38 @@ describe('testsite', () => {
 
   it('turns off caching', async () => {
     expect((await get('/')).headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+function code(secret: string, timeMs: number): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const char of secret) bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)));
+  const message = Buffer.alloc(8);
+  message.writeBigUInt64BE(BigInt(Math.floor(timeMs / 30_000)));
+  const digest = createHmac('sha1', key).update(message).digest();
+  const offset = (digest[digest.length - 1] ?? 0) & 0x0f;
+  return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
+}
+
+describe('login page (spec section 15.3)', () => {
+  it('shows a form with email, password, and code fields', async () => {
+    const res = await get('/login');
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    for (const name of ['email', 'password', 'code']) expect(body).toContain(`name="${name}"`);
+  });
+
+  it('accepts the test account with a current TOTP code, and rejects others', async () => {
+    const { email, password, totpSecret } = TESTSITE_ACCOUNT;
+    const query = (pw: string, otp: string) =>
+      `/login/check?email=${encodeURIComponent(email)}&password=${encodeURIComponent(pw)}&code=${otp}`;
+    const ok = await get(query(password, code(totpSecret, Date.now())));
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toContain('<p id="login-result">Logged in</p>');
+    const bad = await get(query('x', '000000'));
+    expect(bad.status).toBe(401);
+    expect(await bad.text()).not.toContain(password);
   });
 });

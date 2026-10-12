@@ -26,7 +26,7 @@ import {
 import {
   ALL_CAPS,
   POD_HOST,
-  startPlaywrightMcp,
+  startMcpSidecar,
   type PlaywrightMcp,
 } from '../helpers/playwright-mcp.js';
 
@@ -100,7 +100,7 @@ describe('MCP proxy against Playwright MCP', { timeout: 60_000 }, () => {
   }
 
   beforeAll(async () => {
-    pw = await startPlaywrightMcp(); // the first run downloads Chromium (up to a few minutes)
+    pw = await startMcpSidecar(); // the first run downloads Chromium (up to a few minutes)
   }, 600_000);
 
   afterAll(async () => {
@@ -413,7 +413,7 @@ describe('MCP proxy against Playwright MCP', { timeout: 60_000 }, () => {
   });
 
   it('has a redaction rule for each tool that Playwright MCP lists with all capabilities', async () => {
-    const all = await startPlaywrightMcp({ caps: ALL_CAPS });
+    const all = await startMcpSidecar({ caps: ALL_CAPS });
     const allGw = await startGateway(all.url);
     try {
       const allOwner = await seedOwnerSession(allGw);
@@ -422,7 +422,7 @@ describe('MCP proxy against Playwright MCP', { timeout: 60_000 }, () => {
       await client.connect(transport);
       const names = (await client.listTools()).tools.map((tool) => tool.name);
       await client.close();
-      expect(names).toHaveLength(72);
+      expect(names).toHaveLength(74);
       expect(names.filter((name) => !Object.hasOwn(REDACTION_RULES, name))).toEqual([]);
       expect(names.filter((name) => TOOL_DENY_LIST.has(name))).toEqual(['browser_run_code_unsafe']);
     } finally {

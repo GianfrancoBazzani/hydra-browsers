@@ -2,7 +2,8 @@
 //
 // REDACTION_RULES has one entry for each tool that @playwright/mcp 0.0.83 can expose over MCP: the 25 default
 // tools (capabilities core, core-navigation, core-input, core-tabs) and the opt-in tools of --caps config,
-// network, storage, devtools, vision, pdf, and testing (72 tools). The CLI-only ("skillOnly") tools of
+// network, storage, devtools, vision, pdf, and testing (72 tools), plus the two Hydra vault tools of the sidecar
+// (vault_list, vault_fill; spec section 8.8). The CLI-only ("skillOnly") tools of
 // playwright-core are not callable over MCP and are not in the table.
 //
 // Order: redact, then cut each string to MAX_STRING_CHARS, then cut the whole object to MAX_ARGUMENTS_BYTES.
@@ -107,6 +108,9 @@ export const REDACTION_RULES: Readonly<Record<string, RedactionRule>> = {
   browser_verify_list_visible: KEEP,
   browser_verify_text_visible: KEEP,
   browser_verify_value: { redact: ['value'] }, // the value of a field, for example a typed password
+  // Hydra vault tools (spec section 8.6): their arguments contain no vault value
+  vault_fill: KEEP,
+  vault_list: KEEP,
 };
 
 export function ruleFor(tool: string): RedactionRule {

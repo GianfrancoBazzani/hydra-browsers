@@ -4,6 +4,7 @@ export { Button, IconButton, type ButtonVariant } from './Button';
 export { Checkbox } from './Checkbox';
 export { ChipInput } from './ChipInput';
 export { CodeBlock } from './CodeBlock';
+export { CountdownRing } from './CountdownRing';
 export { cx } from './cx';
 export { ICON_STROKE, OsIcon } from './icon';
 export {

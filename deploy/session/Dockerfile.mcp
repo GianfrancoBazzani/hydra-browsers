@@ -1,10 +1,11 @@
-# hydra-mcp image: Playwright MCP from the lockfile (spec sections 3.4.4, 7.4, 7.7, 11.1).
+# hydra-mcp image: the hydra-mcp program of @hydra/mcp-sidecar, which embeds Playwright MCP and adds the
+# vault fill (spec sections 3.4.4, 7.4, 7.7, 8.8, 11.1).
 # Build from the repository root: docker build -f deploy/session/Dockerfile.mcp .
 # Do not install Playwright MCP with a global npm install: that does not use the lockfile.
-# The exact @playwright/mcp version comes from packages/mcp-sidecar/package.json. The gateway's
-# tool policy (packages/server/src/mcp-proxy/tool-policy.ts) and the integration test
-# packages/server/test/integration/mcp-playwright.test.ts are tied to 0.0.83 (72 tools), so a
-# version bump must update them.
+# The exact @playwright/mcp and playwright versions come from packages/mcp-sidecar/package.json. The
+# gateway's tool policy (packages/server/src/mcp-proxy/tool-policy.ts), its redaction table, and the
+# integration tests (mcp-playwright.test.ts, mcp-sidecar.test.ts) are tied to 0.0.83 (27 tools by default,
+# 74 with all capabilities, with the two vault tools), so a version bump must update them.
 
 FROM node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 ENV CI=true
@@ -13,6 +14,7 @@ WORKDIR /src
 COPY . .
 RUN --mount=type=cache,id=hydra-pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile \
+    && pnpm --filter "@hydra/mcp-sidecar..." run build \
     && pnpm --filter @hydra/mcp-sidecar deploy --prod /out
 
 FROM node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
@@ -22,9 +24,10 @@ ENV HOME=/tmp
 WORKDIR /app
 COPY --from=build /out /app
 # No browser download: the sidecar connects to the Chromium of the neko container over CDP.
-RUN ln -s /app/node_modules/@playwright/mcp/cli.js /usr/local/bin/playwright-mcp \
-    && playwright-mcp --version
+# @hydra/shared is in /app/node_modules with its dist, because the build ran before the deploy.
+RUN chmod +x /app/dist/main.js \
+    && ln -s /app/dist/main.js /usr/local/bin/hydra-mcp
 USER 1000:1000
-# The orchestrator sets the arguments: --cdp-endpoint http://127.0.0.1:9222 --host 0.0.0.0
+# The orchestrator sets the command: hydra-mcp --cdp-endpoint http://127.0.0.1:9222 --host 0.0.0.0
 # --port 8931 (spec section 7.4).
-ENTRYPOINT ["playwright-mcp"]
+ENTRYPOINT ["hydra-mcp"]

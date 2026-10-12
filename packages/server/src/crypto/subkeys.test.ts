@@ -20,6 +20,7 @@ describe('deriveSubkeys', () => {
     expect(subkeys.liveGrant).toEqual(hkdfReference(ROOT, 'hydra/live-grant/v1'));
     expect(subkeys.agentToken).toEqual(hkdfReference(ROOT, 'hydra/agent-token/v1'));
     expect(subkeys.neko).toEqual(hkdfReference(ROOT, 'hydra/neko/v1'));
+    expect(subkeys.vault).toEqual(hkdfReference(ROOT, 'hydra/vault/v1'));
   });
 
   it('matches the known-answer vectors', () => {

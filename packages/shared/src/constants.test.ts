@@ -19,9 +19,9 @@ describe('constants', () => {
     }
   });
 
-  it('has the 12 actions of spec section 6.5 and the 22 audit kinds of spec section 13.2', () => {
-    expect(ACTIONS).toHaveLength(12);
-    expect(AUDIT_KINDS).toHaveLength(22);
+  it('has the 15 actions of spec section 6.5 and the 26 audit kinds of spec section 13.2', () => {
+    expect(ACTIONS).toHaveLength(15);
+    expect(AUDIT_KINDS).toHaveLength(26);
   });
 
   it('member roles are the session roles without owner', () => {

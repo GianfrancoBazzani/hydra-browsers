@@ -17,6 +17,7 @@ describe('ERROR_STATUS', () => {
       conflict: 409,
       invalid_state: 409,
       capacity_reached: 409,
+      vault_limit_reached: 409,
       body_too_large: 413,
       internal: 500,
     });

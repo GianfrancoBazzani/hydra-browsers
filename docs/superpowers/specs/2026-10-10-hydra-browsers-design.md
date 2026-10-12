@@ -913,7 +913,7 @@ The DB keeps `desired_state` (`running`, `stopped`, `deleted`). Kubernetes keeps
 | Start | `session.lifecycle` | If `state` is `starting` or `running`: no change. If `state` is not `stopped` or `error`: 409 `invalid_state`. Else, in one DB transaction: if the session holds no media port and the number of sessions that hold one is `HYDRA_MAX_RUNNING` or more, 409 `capacity_reached`. Else assign a media port if the session holds none (section 7.8), copy the settings to `applied_settings`, and set `started_at = now`, `ready_at = NULL`, `error_reason = NULL`, and `desired_state = running`. |
 | Stop | `session.lifecycle` | If `state` is `deleting` or `deleted`: 409 `invalid_state`. Else set `desired_state = stopped`. |
 | Restart | `session.lifecycle` | If `state` is not `starting` or `running`: 409 `invalid_state` (use Start). Else copy the settings to `applied_settings`, and set `started_at = now` and `ready_at = NULL`. The new `hydra/started-at` annotation changes the pod template, so the StatefulSet replaces the pod. The media port does not change. |
-| Delete | `session.delete` | The request body must contain the exact session name, else 400 `confirm_mismatch`. In one DB transaction: set `desired_state = deleted`, revoke all tokens of the session, and delete its vault credentials (section 6.9). |
+| Delete | `session.delete` | The request body must contain the exact session name, else 400 `confirm_mismatch`. Revoke all tokens of the session. Then, in one DB transaction, set `desired_state = deleted` and delete its vault credentials (section 6.9). |
 
 The reconciler runs at gateway start, after each action above, on each Kubernetes watch event in
 `hydra-sessions`, and every 30 s. For each session, one pass has two steps.
@@ -1165,6 +1165,17 @@ Arguments of `vault_fill` (zod schema in `@hydra/shared`):
   `createConnection(config, () => context)` of `@playwright/mcp`. All MCP sessions share the browser
   context and the Chromium tabs (section 8.4). The `config` gives the same tools and defaults as the
   `playwright-mcp` command line did (spike V2).
+- Results of spike V2:
+  - The `config` sets `sharedBrowserContext: true`. Thus `browser_close` returns the error "The browser
+    context is shared between clients and cannot be closed.", and the end of an MCP session does not
+    close the Chromium tabs.
+  - `createConnection` has no heartbeat, so the sidecar has the heartbeat of the command line: after the
+    first tool call and the first GET stream of an MCP session, it sends a `ping` each 3 s on the GET
+    stream. If a `ping` gets no answer in 5 s, the sidecar ends the MCP session.
+  - An MCP session without a request for 30 min is also ended (a client without a GET stream gets no
+    `ping`). Its client then gets 404 and initializes again.
+  - The sidecar rejects another `Host` with 403 "Access is only allowed at localhost:8931", as the command
+    line does.
 - For each MCP session, an interceptor is between the HTTP transport and the Playwright MCP server.
   The interceptor:
   - adds the definitions of `vault_list` and `vault_fill` to each `tools/list` result, and removes

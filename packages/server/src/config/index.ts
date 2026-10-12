@@ -8,4 +8,4 @@ export {
   SESSION_TRANSPORTS,
   type Config,
 } from './config.js';
-export { publicSuffix, registrableDomain, siteOf } from './public-suffix.js';
+export { publicSuffix, registrableDomain, siteDomainOf, siteOf } from './public-suffix.js';

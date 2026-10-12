@@ -15,7 +15,7 @@ export interface SessionAccessView {
 
 export type EffectiveRole = SessionRole | 'admin';
 
-const VIEWER_RIGHTS: readonly Action[] = ['session.read', 'live.watch'];
+const VIEWER_RIGHTS: readonly Action[] = ['session.read', 'live.watch', 'vault.read'];
 const OPERATOR_RIGHTS: readonly Action[] = [
   ...VIEWER_RIGHTS,
   'live.control',

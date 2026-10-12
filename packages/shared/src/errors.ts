@@ -12,6 +12,7 @@ export const ERROR_CODES = [
   'conflict',
   'invalid_state',
   'capacity_reached',
+  'vault_limit_reached',
   'body_too_large',
   'internal',
 ] as const;
@@ -35,6 +36,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
   conflict: 409,
   invalid_state: 409,
   capacity_reached: 409,
+  vault_limit_reached: 409,
   body_too_large: 413,
   internal: 500,
 };

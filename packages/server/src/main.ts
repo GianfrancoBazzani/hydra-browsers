@@ -32,6 +32,7 @@ import {
 import { createSessionDeps } from './sessions/index.js';
 import { TokensService } from './tokens/index.js';
 import { UsersService } from './users/index.js';
+import { VaultService } from './vault/index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Spec section 14: open streams and WebSockets get 10 s after SIGTERM, then they are closed. */
@@ -75,6 +76,8 @@ async function main(): Promise<void> {
   const hasher = new PasswordHasher(subkeys.passwordPepper);
   const access = new AccessService({ db, clock, audit, bus });
   const tokens = new TokensService({ db, clock, subkeys, access, audit, bus });
+  const vault = new VaultService({ db, clock, subkeys, config, audit, bus }); // spec section 6.9
+  vault.start();
   const auth = new AuthService({ db, clock, subkeys, hasher, audit, bus });
   const users = new UsersService({ db, clock, hasher, auth, tokens, audit, bus });
   // Plan 04: Kubernetes client, startup check of HYDRA_MEDIA_PORT_RANGE (spec section 4), session deps.
@@ -126,6 +129,7 @@ async function main(): Promise<void> {
     activity,
     mcpStreams,
     live,
+    vault,
   };
   const app = await buildApp(deps);
   attachLiveUpgrade(app.server, deps); // plan 06
@@ -167,6 +171,7 @@ async function main(): Promise<void> {
     force.unref();
     // Plans 05 and 06 stop their jobs and start their 10 s close timers here (index 5.9).
     activity.stop(); // plan 05
+    vault.stop();
     stopMcpConnectionCheck(); // plan 05
     scheduleMcpStreamShutdown(deps); // plan 05, spec section 14: closes the open MCP streams after 10 s
     // Plan 06: spec section 14, the open WebSockets get 10 s, then they close. The grants stay in

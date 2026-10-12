@@ -137,7 +137,7 @@ export function buildStatefulSet(input: StatefulSetInput): V1StatefulSet & KubeO
               name: 'mcp',
               image: input.mcpImage,
               command: [
-                'playwright-mcp',
+                'hydra-mcp',
                 '--cdp-endpoint',
                 'http://127.0.0.1:9222',
                 '--host',

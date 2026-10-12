@@ -21,7 +21,13 @@ import type { AuthedUser, LoginContext } from '../auth/index.js';
 import type { Config } from '../config/index.js';
 import { newSid } from '../crypto/index.js';
 import type { Db } from '../db/index.js';
-import { sessionMembers, sessions, users, type SessionRow } from '../db/schema.js';
+import {
+  sessionMembers,
+  sessions,
+  users,
+  vaultCredentials,
+  type SessionRow,
+} from '../db/schema.js';
 import type { Clock } from '../lib/clock.js';
 import { HydraError } from '../lib/errors.js';
 import { objectNames } from '../orchestrator/names.js';
@@ -235,11 +241,14 @@ export class SessionsService {
     // Revoke first: a repeated Delete after a crash between the two steps still revokes the tokens.
     this.deps.tokens.revokeAllForSession(sessionId);
     if (row.desiredState === 'deleted') return;
-    this.deps.db
-      .update(sessions)
-      .set({ desiredState: 'deleted', updatedAt: this.deps.clock.now() })
-      .where(eq(sessions.id, sessionId))
-      .run();
+    // Spec section 7.9: desired_state and the vault credentials change in one transaction.
+    this.deps.db.transaction((tx) => {
+      tx.update(sessions)
+        .set({ desiredState: 'deleted', updatedAt: this.deps.clock.now() })
+        .where(eq(sessions.id, sessionId))
+        .run();
+      tx.delete(vaultCredentials).where(eq(vaultCredentials.sessionId, sessionId)).run();
+    });
     this.audit(context, sessionId, 'session.deleted', { name: row.name });
     this.deps.reconciler.trigger(sessionId);
   }

@@ -14,13 +14,15 @@ export type JsonRpcMessage =
   | { kind: 'response'; id: JsonRpcId | null; result: unknown; error: JsonRpcErrorObject | null }
   | { kind: 'invalid'; method: string | null; params: unknown };
 
+export type RequestMessage = Extract<JsonRpcMessage, { kind: 'request' }>;
+
 export type ParsedBody =
   | { ok: true; batch: boolean; messages: JsonRpcMessage[] }
   | { ok: false; reason: 'invalid_utf8' | 'invalid_json' };
 
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
-function isObject(value: unknown): value is Record<string, unknown> {
+export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 

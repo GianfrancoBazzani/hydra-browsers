@@ -24,6 +24,7 @@ export interface Config {
   defaultTimezone: string;
   defaultLanguage: string;
   auditRetentionDays: number;
+  vaultHttpHosts: string[];
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   port: number;
 }
@@ -71,6 +72,7 @@ const VARIABLES = [
   'HYDRA_DEFAULT_TIMEZONE',
   'HYDRA_DEFAULT_LANGUAGE',
   'HYDRA_AUDIT_RETENTION_DAYS',
+  'HYDRA_VAULT_HTTP_HOSTS',
   'HYDRA_LOG_LEVEL',
   'PORT',
 ] as const;
@@ -156,13 +158,35 @@ function isIpOrCidr(entry: string): boolean {
   return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (version === 4 ? 32 : 128);
 }
 
-function parseProxies(value: string, ctx: Ctx): string[] {
-  const entries = value
+/** The entries of a comma-separated list, without spaces and empty entries. */
+function splitList(value: string): string[] {
+  return value
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry !== '');
+}
+
+function parseProxies(value: string, ctx: Ctx): string[] {
+  const entries = splitList(value);
   if (entries.length === 0 || !entries.every(isIpOrCidr)) {
     addIssue(ctx, 'must be a comma-separated list of IP addresses or CIDR ranges');
+    return z.NEVER;
+  }
+  return entries;
+}
+
+const HOSTNAME =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+/** Spec section 4: lowercase hostnames, without a scheme, a port, or a path. Empty by default. */
+function parseHostList(value: string | undefined, ctx: Ctx): string[] {
+  if (value === undefined) return [];
+  const entries = splitList(value);
+  if (!entries.every((entry) => HOSTNAME.test(entry))) {
+    addIssue(
+      ctx,
+      'must be a comma-separated list of lowercase hostnames, without a scheme, a port, or a path',
+    );
     return z.NEVER;
   }
   return entries;
@@ -262,6 +286,7 @@ const envSchema = z
     HYDRA_DEFAULT_TIMEZONE: required.pipe(TimezoneSchema),
     HYDRA_DEFAULT_LANGUAGE: required.pipe(LanguageSchema),
     HYDRA_AUDIT_RETENTION_DAYS: required.transform(parseInteger(1, 36500)),
+    HYDRA_VAULT_HTTP_HOSTS: z.string().optional().transform(parseHostList),
     HYDRA_LOG_LEVEL: z.enum(LOG_LEVELS, { error: `must be one of ${LOG_LEVELS.join(', ')}` }),
     PORT: required.transform(parseInteger(1, 65535)),
   })
@@ -315,6 +340,7 @@ const envSchema = z
       defaultTimezone: env.HYDRA_DEFAULT_TIMEZONE,
       defaultLanguage: env.HYDRA_DEFAULT_LANGUAGE,
       auditRetentionDays: env.HYDRA_AUDIT_RETENTION_DAYS,
+      vaultHttpHosts: env.HYDRA_VAULT_HTTP_HOSTS,
       logLevel: env.HYDRA_LOG_LEVEL,
       port: env.PORT,
     };

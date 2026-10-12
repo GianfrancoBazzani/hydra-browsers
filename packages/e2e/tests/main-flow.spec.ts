@@ -229,7 +229,54 @@ test('main flow: login, session, live view, agent, audit, stop and start, delete
       ).toBe(siteCookie);
     });
 
-    await test.step('10. delete removes all Kubernetes objects and the profile folder', async () => {
+    await test.step('10. the agent logs in to the test site with vault_fill and sees no value', async () => {
+      const { email, password, totpSecret } = E2E.testsite.account;
+      const { id } = await adminApi.createCredential(sid(), {
+        name: 'Test site',
+        website: E2E.testsite.origin,
+        username: email,
+        password,
+        totp: { secret: totpSecret },
+      });
+      await page.goto(`/sessions/${sid()}/vault`);
+      await expect(page.getByRole('button', { name: 'Test site' })).toBeVisible();
+
+      const outputs: string[] = [];
+      const run = async (name: string, args: Record<string, unknown>) => {
+        const outcome = await callTool(agent(), name, args);
+        outputs.push(JSON.stringify(outcome));
+        return outcome;
+      };
+      expect((await run('vault_list', {})).text).toContain(`- ${id} · Test site`);
+      await navigate(agent(), `${E2E.testsite.origin}${E2E.testsite.loginPath}`);
+      const snapshot = (await run('browser_snapshot', {})).text;
+      const ref = (label: string) =>
+        new RegExp(`textbox "${label}"[^\\n]*\\[ref=([a-z0-9]+)\\]`).exec(snapshot)?.[1] ?? '';
+      for (const [field, label] of [
+        ['username', 'Email'],
+        ['password', 'Password'],
+      ] as const) {
+        const filled = await run('vault_fill', { credentialId: id, field, target: ref(label) });
+        expect(filled.isError, filled.text).toBe(false);
+      }
+      const submitted = await run('vault_fill', {
+        credentialId: id,
+        field: 'totp',
+        target: ref('Code'),
+        submit: true,
+      });
+      expect(submitted.isError, submitted.text).toBe(false);
+      await expect
+        .poll(async () => (await run('browser_snapshot', {})).text, { timeout: 15_000 })
+        .toContain('Logged in');
+      const audit = JSON.stringify((await adminApi.audit(sid(), { limit: 200 })).events);
+      for (const secret of [email, password]) {
+        for (const output of outputs) expect(output).not.toContain(secret);
+        expect(audit).not.toContain(secret);
+      }
+    });
+
+    await test.step('11. delete removes all Kubernetes objects, the profile folder, and the credentials', async () => {
       await agent().close();
       mcp = undefined;
       const volume = await pvcVolume(E2E.sessionNamespace, `profile-${sid()}`);
@@ -247,6 +294,8 @@ test('main flow: login, session, live view, agent, audit, stop and start, delete
       await expect.poll(() => nodePathExists(volume.node, volume.path), poll).toBe(false);
       // Delete revokes the tokens of the session (spec section 7.9).
       expect((await mcpPost(mcpEndpoint(sid()), secret(), initializeMessage())).status).toBe(401);
+      // And deletes its vault credentials (spec section 15.3 step 11).
+      expect((await adminApi.call('GET', `/api/sessions/${sid()}/vault`)).status).toBe(404);
     });
   } finally {
     await mcp?.close();

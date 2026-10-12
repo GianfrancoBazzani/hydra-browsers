@@ -12,6 +12,7 @@ import { ActivityTracker, StreamRegistry } from '../../src/mcp-proxy/index.js';
 import { createSessionDeps } from '../../src/sessions/index.js';
 import { TokensService } from '../../src/tokens/index.js';
 import { UsersService } from '../../src/users/index.js';
+import { VaultService } from '../../src/vault/index.js';
 import { FakeClock } from './clock.js';
 import { testConfig } from './config.js';
 import { createTestDb } from './db.js';
@@ -94,7 +95,27 @@ export async function createTestApp(overrides: Partial<AppDeps> = {}): Promise<{
       audit: base.audit,
       access: base.access,
     });
-  const deps: AppDeps = { ...base, ...sessionDeps, activity, mcpStreams, live, ...overrides };
+  // Secrets vault (spec section 6.9; a test can pass its own).
+  const vault =
+    overrides.vault ??
+    new VaultService({
+      db: base.db,
+      clock: base.clock,
+      subkeys: base.subkeys,
+      config: base.config,
+      audit: base.audit,
+      bus: base.bus,
+    });
+  vault.start();
+  const deps: AppDeps = {
+    ...base,
+    ...sessionDeps,
+    activity,
+    mcpStreams,
+    live,
+    vault,
+    ...overrides,
+  };
   const app = await buildApp(deps);
   await app.ready();
   return {
@@ -104,6 +125,7 @@ export async function createTestApp(overrides: Partial<AppDeps> = {}): Promise<{
     close: async () => {
       deps.mcpStreams.closeWhere(() => true, 'test app closed'); // plan 05
       deps.activity.stop(); // plan 05
+      deps.vault.stop();
       await deps.reconciler.stop(); // plan 04
       await deps.podEndpoints.close(); // plan 04
       deps.live.closeAll('test finished'); // plan 06
