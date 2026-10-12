@@ -4,12 +4,13 @@ import { describe, expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 
 describe('@hydra/mcp-sidecar', () => {
-  it('installs @playwright/mcp 0.0.83 with the playwright-mcp command', () => {
-    const manifest = require('@playwright/mcp/package.json') as {
+  it('uses @playwright/mcp 0.0.83 and the same playwright version (spec section 3.4.4)', () => {
+    const mcp = require('@playwright/mcp/package.json') as {
       version: string;
-      bin: Record<string, string>;
+      dependencies: Record<string, string>;
     };
-    expect(manifest.version).toBe('0.0.83');
-    expect(manifest.bin).toHaveProperty('playwright-mcp');
+    const playwright = require('playwright/package.json') as { version: string };
+    expect(mcp.version).toBe('0.0.83');
+    expect(playwright.version).toBe(mcp.dependencies.playwright);
   });
 });

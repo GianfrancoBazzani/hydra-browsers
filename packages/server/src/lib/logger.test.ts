@@ -52,6 +52,21 @@ describe('logger', () => {
     });
   });
 
+  it('redacts the vault fields of spec section 14', () => {
+    const { logger, lines } = captureLogger();
+    logger.info({
+      username: 'u',
+      value: 'v',
+      secret: 's',
+      totp: 't',
+      uri: 'o',
+      hydraFill: { value: 'x' },
+    });
+    for (const field of ['username', 'value', 'secret', 'totp', 'uri', 'hydraFill']) {
+      expect(lines[0]?.[field]).toBe('[redacted]');
+    }
+  });
+
   it('createLogger uses the configured level', () => {
     expect(createLogger('warn').level).toBe('warn');
   });

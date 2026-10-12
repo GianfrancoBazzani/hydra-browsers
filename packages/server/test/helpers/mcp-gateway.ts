@@ -18,6 +18,7 @@ import {
   type Dispatcher,
   type RequestInit as UndiciRequestInit,
 } from 'undici';
+import type { AppDeps } from '../../src/app.js';
 import type { PodEndpointResolver } from '../../src/orchestrator/index.js';
 import { SseParser, type SseEvent } from '../../src/mcp-proxy/sse.js';
 import { createTestApp } from './app.js';
@@ -42,12 +43,15 @@ export interface Gateway {
 }
 
 /** createTestApp with podEndpoints → podUrl (the MCP server of the test), listening on a real port. */
-export async function startGateway(podUrl: string): Promise<Gateway> {
+export async function startGateway(
+  podUrl: string,
+  overrides: Partial<AppDeps> = {},
+): Promise<Gateway> {
   const podEndpoints: PodEndpointResolver = {
     endpoint: () => Promise.resolve(podUrl),
     close: () => Promise.resolve(),
   };
-  const testApp = await createTestApp({ podEndpoints });
+  const testApp = await createTestApp({ ...overrides, podEndpoints });
   const { app, deps, clock } = testApp;
   if (deps.podEndpoints !== podEndpoints) throw new Error('createTestApp ignored podEndpoints');
   await app.listen({ port: 0, host: '127.0.0.1' });

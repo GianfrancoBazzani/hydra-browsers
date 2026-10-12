@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 // Test site for the e2e tests (spec section 15.3). Session pods reach it in the dev overlay at
@@ -7,6 +8,65 @@ export const COOKIE_NAME = 'hydra_testsite';
 /** 30 days: a persistent cookie, so it is still there after a session stop and start. */
 export const COOKIE_MAX_AGE_SECONDS = 2_592_000;
 const COOKIE_VALUE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** The account of the vault e2e step (spec section 15.3). Test data only. */
+export const TESTSITE_ACCOUNT = {
+  email: 'agent@testsite.local',
+  password: 'Testsite-Password-1',
+  totpSecret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+} as const;
+
+function totpCode(secret: string, counter: number): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const char of secret) bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)));
+  const message = Buffer.alloc(8);
+  message.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac('sha1', key).update(message).digest();
+  const offset = (digest[digest.length - 1] ?? 0) & 0x0f;
+  return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
+}
+
+function same(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+function loginPage(): string {
+  return page(
+    'Login',
+    [
+      '<form method="get" action="/login/check">',
+      '<p><label>Email <input name="email" type="email" autocomplete="username"></label></p>',
+      '<p><label>Password <input name="password" type="password" autocomplete="current-password"></label></p>',
+      '<p><label>Code <input name="code" inputmode="numeric" autocomplete="one-time-code"></label></p>',
+      '<p><button type="submit">Log in</button></p>',
+      '</form>',
+    ].join(''),
+  );
+}
+
+function checkLogin(url: URL, response: ServerResponse): void {
+  const email = url.searchParams.get('email') ?? '';
+  const password = url.searchParams.get('password') ?? '';
+  const code = url.searchParams.get('code') ?? '';
+  const counter = Math.floor(Date.now() / 30_000);
+  const codeOk = [counter - 1, counter, counter + 1].some((c) =>
+    same(code, totpCode(TESTSITE_ACCOUNT.totpSecret, c)),
+  );
+  const ok =
+    same(email, TESTSITE_ACCOUNT.email) && same(password, TESTSITE_ACCOUNT.password) && codeOk;
+  sendHtml(
+    response,
+    ok ? 200 : 401,
+    page(
+      ok ? 'Logged in' : 'Login failed',
+      `<p id="login-result">${ok ? 'Logged in' : 'Login failed'}</p>`,
+    ),
+  );
+}
 
 export function createTestsiteServer(): Server {
   return createServer(handleRequest);
@@ -42,6 +102,12 @@ function handleRequest(request: IncomingMessage, response: ServerResponse): void
       return;
     case '/redirect':
       redirect(url, response);
+      return;
+    case '/login':
+      sendHtml(response, 200, loginPage());
+      return;
+    case '/login/check':
+      checkLogin(url, response);
       return;
     default:
       sendText(response, 404, 'Not Found\n');

@@ -220,9 +220,18 @@ importers:
 
   packages/mcp-sidecar:
     dependencies:
+      '@hydra/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@modelcontextprotocol/sdk':
+        specifier: 1.32.0
+        version: 1.32.0(zod@4.6.5)
       '@playwright/mcp':
         specifier: 0.0.83
         version: 0.0.83
+      playwright:
+        specifier: 1.64.0-alpha-1790635538000
+        version: 1.64.0-alpha-1790635538000
 
   packages/server:
     dependencies:

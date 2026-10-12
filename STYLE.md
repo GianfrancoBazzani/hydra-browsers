@@ -228,6 +228,8 @@ controls.
 | Menu | Radix DropdownMenu. Radius 8px, padding 4px, items 24px high, `--os-text-sm`, menu material. A destructive item uses `--os-red-accessible`. |
 | Live view | The iframe keeps the aspect ratio of the session screen and is centered on `--os-black` (spec). Banners are above the iframe. The status bar (28px, `--os-text-xs`, `--os-gray-accessible`) is under it: connected agents, the last tool call in `--os-font-mono` (for example `browser_click · ok · 230 ms`), and the full-screen button (`IconMaximize`) on the right (spec). |
 | Code block | For the token commands: `--os-gray-6` background, radius 6px, `--os-font-mono` `--os-text-sm`, a copy button (`IconCopy`, `aria-label="Copy"`). |
+| `CountdownRing` | 16px circle with a 2px stroke: track `--os-tone-strong`, progress `--os-accent`, from the top, clockwise. It shows the part of a TOTP period that is left. `role="img"` and a label, for example "12 seconds left". |
+| Secret value (credential sheet) | A hidden value shows dots in `--os-font-mono` `--os-text-sm`. On the right: the eye button (`IconEye` or `IconEyeOff`, `aria-label` "Show password", "Hide password", "Show code", "Hide code") and the copy button (`IconCopy`, `aria-label` "Copy password" or "Copy code"). A label above the value: `--os-text-xs`, weight 600, `--os-gray-accessible`. |
 
 Banner variants for the spec texts:
 
@@ -249,9 +251,11 @@ Banner variants for the spec texts:
 Use these texts exactly (spec):
 
 - Sidebar: "My sessions", "Shared with me", "Admin", "Users", "All sessions".
-- Views: "Live", "Tokens", "Sharing", "Activity", "Settings".
-- Buttons: "Start", "Stop", "Restart", "Delete", "Retry start", "Revoke", "Remove", "Load older".
-- Sheets: "New session", "New token", "Create user".
+- Views: "Live", "Tokens", "Vault", "Sharing", "Activity", "Settings".
+- Buttons: "Start", "Stop", "Restart", "Delete", "Retry start", "Revoke", "Remove", "Load older", "New credential",
+  "Edit", "Done", "Advanced".
+- Sheets: "New session", "New token", "Create user", "New credential", "Edit credential".
+- Credential fields: "Name", "Website", "Login", "Password", "Two-factor secret", "Two-factor code".
 - Banners and notices: "Agent active", "More than one agent is connected", "Allowlist permits all
   domains", "Restart required".
 - Login error: "Invalid email or password".

@@ -26,8 +26,9 @@ assert_contains 'mcp: frozen lockfile' "$mcp" 'pnpm install --frozen-lockfile'
 assert_contains 'mcp: pnpm deploy of spec 3.4.4' "$mcp" 'pnpm --filter @hydra/mcp-sidecar deploy --prod /out'
 assert_not_contains 'mcp: no global Playwright MCP install' "$mcp" 'npm install -g @playwright'
 assert_contains 'mcp: non-root numeric user' "$mcp" 'USER 1000:1000'
-assert_contains 'mcp: playwright-mcp is the command' "$mcp" 'ENTRYPOINT ["playwright-mcp"]'
-assert_contains 'mcp: playwright-mcp is on PATH' "$mcp" 'ln -s /app/node_modules/@playwright/mcp/cli.js /usr/local/bin/playwright-mcp'
+assert_contains 'mcp: the sidecar and its workspace dependencies are built' "$mcp" 'pnpm --filter "@hydra/mcp-sidecar..." run build'
+assert_contains 'mcp: hydra-mcp is the command (spec 7.4)' "$mcp" 'ENTRYPOINT ["hydra-mcp"]'
+assert_contains 'mcp: hydra-mcp is on PATH' "$mcp" 'ln -s /app/dist/main.js /usr/local/bin/hydra-mcp'
 assert_contains 'mcp: HOME on the /tmp volume' "$mcp" 'ENV HOME=/tmp'
 for file in "$session_file" "$mcp_file"; do
   assert_eq "$(basename "$file"): every FROM line has a digest" '0' "$(grep '^FROM ' "$file" | grep -vc '@sha256:' || true)"

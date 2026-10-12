@@ -9,8 +9,6 @@
 // browser_evaluate runs its code in the page (page.evaluate), so it is not in the list (spec section 8.6 keeps
 // its code in the audit log).
 
-import { jsonRpcError, type JsonRpcId } from './jsonrpc.js';
-
 export const TOOL_DENY_LIST: ReadonlySet<string> = new Set([
   'browser_run_code_unsafe',
   'browser_run_code',
@@ -29,7 +27,3 @@ export function deniedToolMessage(tool: string): string {
 
 export const BATCH_REJECTED_MESSAGE =
   'Batch rejected, because it contains a tool call that the Hydra gateway blocks.';
-
-export function deniedToolError(id: JsonRpcId | null, tool: string): Record<string, unknown> {
-  return jsonRpcError(id, DENIED_TOOL_ERROR_CODE, deniedToolMessage(tool));
-}

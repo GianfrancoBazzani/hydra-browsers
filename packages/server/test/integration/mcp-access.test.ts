@@ -16,7 +16,7 @@ import {
   type Gateway,
   type SeededOwner,
 } from '../helpers/mcp-gateway.js';
-import { startPlaywrightMcp, type PlaywrightMcp } from '../helpers/playwright-mcp.js';
+import { startMcpSidecar, type PlaywrightMcp } from '../helpers/playwright-mcp.js';
 
 const PAGE = 'data:text/html,<title>Hydra access test</title><p>Hello</p>';
 
@@ -51,7 +51,7 @@ describe('MCP proxy and session sharing', { timeout: 60_000 }, () => {
   }
 
   beforeAll(async () => {
-    pw = await startPlaywrightMcp();
+    pw = await startMcpSidecar();
   }, 600_000);
 
   afterAll(async () => {

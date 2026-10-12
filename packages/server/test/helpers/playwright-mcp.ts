@@ -1,4 +1,5 @@
-// Starts a local Chromium with a CDP port and the Playwright MCP server of @hydra/mcp-sidecar (index 5.12).
+// Starts a local Chromium with a CDP port and the hydra-mcp sidecar of @hydra/mcp-sidecar (index 5.12, spec
+// section 15.2), or the stock playwright-mcp CLI for the parity test of spike V2.
 //
 // The Chromium build is the one of the playwright-core version that @playwright/mcp 0.0.83 uses
 // (Chrome for Testing 155.0.8059.12, playwright "chromium-1247"). The first start downloads it when it is
@@ -37,8 +38,12 @@ export const POD_HOST = 'localhost:8931';
 export interface PlaywrightMcp {
   /** Base URL of the MCP server, for example http://127.0.0.1:53123 (the gateway adds /mcp). */
   url: string;
+  /** All stderr text of the MCP process (spec section 15.2: no vault value in the sidecar logs). */
+  logs(): string;
   stop(): Promise<void>;
 }
+
+const SIDECAR_MAIN = path.join(SIDECAR_DIR, 'src', 'main.ts');
 
 export async function chromiumExecutable(): Promise<string> {
   const { chromium } = requireFromMcp('playwright-core') as {
@@ -111,12 +116,18 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   clearTimeout(timer);
 }
 
-export async function startPlaywrightMcp(
-  options: { caps?: readonly string[] } = {},
+type SpawnMcp = (cdpEndpoint: string, workDir: string, caps: readonly string[]) => ChildProcess;
+
+/** Starts a local Chromium with a CDP port and an MCP server that `spawnMcp` starts. */
+async function startWith(
+  options: { caps?: readonly string[] },
+  name: string,
+  spawnMcp: SpawnMcp,
 ): Promise<PlaywrightMcp> {
   const executable = await chromiumExecutable();
   const workDir = mkdtempSync(path.join(tmpdir(), 'hydra-playwright-mcp-'));
   const children: ChildProcess[] = [];
+  let logs = '';
   const stop = async (): Promise<void> => {
     for (const child of children.reverse()) await stopProcess(child);
     // Chromium helper processes can still write into the profile for a moment after the main one exits.
@@ -145,9 +156,30 @@ export async function startPlaywrightMcp(
       'Chromium',
     );
     const cdpEndpoint = `http://127.0.0.1:${devtools[1] ?? ''}`;
+    const mcp = spawnMcp(cdpEndpoint, workDir, options.caps ?? []);
+    children.push(mcp);
+    mcp.stderr?.on('data', (data: Buffer) => {
+      logs += data.toString('utf8');
+    });
+    const listening = await waitForOutput(
+      mcp,
+      /Listening on http:\/\/localhost:(\d+)\r?\n/,
+      30_000,
+      name,
+    );
+    return { url: `http://127.0.0.1:${listening[1] ?? ''}`, logs: () => logs, stop };
+  } catch (err) {
+    await stop();
+    throw err;
+  }
+}
 
-    const caps = options.caps ?? [];
-    const mcp = spawn(
+/** The stock playwright-mcp CLI (only for the parity test of spike V2). */
+export function startPlaywrightMcpCli(
+  options: { caps?: readonly string[] } = {},
+): Promise<PlaywrightMcp> {
+  return startWith(options, 'playwright-mcp', (cdpEndpoint, workDir, caps) =>
+    spawn(
       process.execPath,
       [
         MCP_CLI,
@@ -164,17 +196,36 @@ export async function startPlaywrightMcp(
         ...(caps.length > 0 ? ['--caps', caps.join(',')] : []),
       ],
       { cwd: workDir, stdio: ['ignore', 'ignore', 'pipe'] },
-    );
-    children.push(mcp);
-    const listening = await waitForOutput(
-      mcp,
-      /Listening on http:\/\/localhost:(\d+)\r?\n/,
-      30_000,
-      'playwright-mcp',
-    );
-    return { url: `http://127.0.0.1:${listening[1] ?? ''}`, stop };
-  } catch (err) {
-    await stop();
-    throw err;
-  }
+    ),
+  );
+}
+
+/** A local Chromium and the hydra-mcp sidecar from its TypeScript source (spec section 15.2). */
+export function startMcpSidecar(
+  options: { caps?: readonly string[] } = {},
+): Promise<PlaywrightMcp> {
+  return startWith(options, 'hydra-mcp', (cdpEndpoint, workDir, caps) =>
+    spawn(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        '--conditions=@hydra/source',
+        SIDECAR_MAIN,
+        '--cdp-endpoint',
+        cdpEndpoint,
+        '--host',
+        '127.0.0.1',
+        '--port',
+        '0',
+        '--allowed-hosts',
+        POD_HOST,
+        '--output-dir',
+        path.join(workDir, 'output'),
+        ...(caps.length > 0 ? ['--caps', caps.join(',')] : []),
+      ],
+      // cwd: the sidecar package, so that Node finds tsx in the workspace node_modules.
+      { cwd: SIDECAR_DIR, stdio: ['ignore', 'ignore', 'pipe'] },
+    ),
+  );
 }

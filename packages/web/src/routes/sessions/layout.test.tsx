@@ -27,7 +27,7 @@ describe('Session toolbar', () => {
     api.on(`POST /api/sessions/${SID}/stop`, { body: makeSession({ state: 'stopping' }) });
     const { user } = renderApp(`/sessions/${SID}/live`);
     expect(await screen.findByRole('heading', { level: 1, name: 'Banking' })).toBeInTheDocument();
-    expect(views()).toEqual(['Live', 'Tokens', 'Sharing', 'Activity', 'Settings']);
+    expect(views()).toEqual(['Live', 'Tokens', 'Vault', 'Sharing', 'Activity', 'Settings']);
     expect(screen.getByRole('radio', { name: 'Live' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Stop' }));
@@ -65,7 +65,7 @@ describe('Session toolbar', () => {
     mockLoggedIn(api, { sessions: [makeSession({ myRole: 'viewer', rights: VIEWER_RIGHTS })] });
     renderApp(`/sessions/${SID}/live`);
     expect(await screen.findByRole('radiogroup', { name: 'Views' })).toBeInTheDocument();
-    expect(views()).toEqual(['Live', 'Sharing', 'Settings']);
+    expect(views()).toEqual(['Live', 'Vault', 'Sharing', 'Settings']);
     expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();

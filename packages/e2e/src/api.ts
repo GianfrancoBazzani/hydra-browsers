@@ -181,6 +181,20 @@ export class HydraApi {
     await this.ok('DELETE', `/api/sessions/${sid}/tokens/${tokenId}`);
   }
 
+  /** POST /api/sessions/:sid/vault (spec section 12.1). */
+  async createCredential(sid: string, body: Record<string, unknown>): Promise<{ id: string }> {
+    const result = await this.call('POST', `/api/sessions/${sid}/vault`, body);
+    if (result.status !== 201) {
+      throw new Error(`credential create failed: ${String(result.status)}`);
+    }
+    return result.json as { id: string };
+  }
+
+  /** The status of POST /api/sessions/:sid/vault/:id/reveal. */
+  async revealCredential(sid: string, id: string, field: 'password' | 'totp'): Promise<number> {
+    return (await this.call('POST', `/api/sessions/${sid}/vault/${id}/reveal`, { field })).status;
+  }
+
   audit(sid: string, query: AuditQuery): Promise<AuditPage> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {

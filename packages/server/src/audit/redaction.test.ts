@@ -172,13 +172,21 @@ const CASES: Case[] = [
     args: { type: 'textbox', element: 'Password', target: 'e6', value: 'hunter2' },
     expected: { type: 'textbox', element: 'Password', target: 'e6', value: '[redacted: 7 chars]' },
   },
+  // Hydra vault tools (spec section 8.6): their arguments contain no vault value
+  keep('vault_fill', {
+    credentialId: '01J9ZC0000000000000000CRD1',
+    field: 'password',
+    target: 'e5',
+    submit: true,
+  }),
+  keep('vault_list', {}),
 ];
 
 describe('REDACTION_RULES', () => {
-  it('has a rule for each of the 72 tools of @playwright/mcp 0.0.83, and a test case for each rule', () => {
+  it('has a rule for each of the 72 tools of @playwright/mcp 0.0.83 and the 2 vault tools, and a test case for each rule', () => {
     const tested = [...new Set(CASES.map((testCase) => testCase.tool))].sort();
     expect(Object.keys(REDACTION_RULES).sort()).toEqual(tested);
-    expect(tested).toHaveLength(72);
+    expect(tested).toHaveLength(74);
   });
 });
 

@@ -108,7 +108,7 @@ describe('buildStatefulSet', () => {
                 name: 'mcp',
                 image: 'registry.example/hydra-mcp:abc@sha256:2222',
                 command: [
-                  'playwright-mcp',
+                  'hydra-mcp',
                   '--cdp-endpoint',
                   'http://127.0.0.1:9222',
                   '--host',

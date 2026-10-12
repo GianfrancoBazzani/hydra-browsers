@@ -7,6 +7,7 @@ export const SUBKEY_LABELS = {
   liveGrant: 'hydra/live-grant/v1',
   agentToken: 'hydra/agent-token/v1',
   neko: 'hydra/neko/v1',
+  vault: 'hydra/vault/v1',
 } as const;
 
 export interface Subkeys {
@@ -15,6 +16,7 @@ export interface Subkeys {
   liveGrant: Buffer;
   agentToken: Buffer;
   neko: Buffer;
+  vault: Buffer;
 }
 
 const SUBKEY_BYTES = 32;
@@ -33,5 +35,6 @@ export function deriveSubkeys(rootKey: Buffer): Subkeys {
     liveGrant: derive(rootKey, SUBKEY_LABELS.liveGrant),
     agentToken: derive(rootKey, SUBKEY_LABELS.agentToken),
     neko: derive(rootKey, SUBKEY_LABELS.neko),
+    vault: derive(rootKey, SUBKEY_LABELS.vault),
   };
 }

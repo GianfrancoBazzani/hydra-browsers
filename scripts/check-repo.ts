@@ -120,6 +120,7 @@ export function checkRepo(root: string): Problem[] {
     ...checkNodeVersions(root, files),
     ...checkPnpmVersions(root, files),
     ...checkTraefikTimeouts(root, files),
+    ...checkSidecarPlaywright(root),
   ];
 }
 
@@ -302,6 +303,26 @@ function checkPnpmVersions(root: string, files: string[]): Problem[] {
     }
   }
   return problems;
+}
+
+/** Spec section 3.4.7: the sidecar uses the playwright version of its @playwright/mcp (one Playwright copy). */
+function checkSidecarPlaywright(root: string): Problem[] {
+  const file = 'packages/mcp-sidecar/package.json';
+  const deps = (readJson(root, file)?.dependencies ?? {}) as Record<string, string>;
+  const mcpVersion = deps['@playwright/mcp'];
+  if (mcpVersion === undefined) return [];
+  const mcpManifest = readJson(
+    root,
+    `node_modules/.pnpm/@playwright+mcp@${mcpVersion}/node_modules/@playwright/mcp/package.json`,
+  );
+  const wanted = (mcpManifest?.dependencies as Record<string, string> | undefined)?.playwright;
+  if (wanted === undefined || deps.playwright === wanted) return [];
+  return [
+    {
+      file,
+      message: `playwright is ${String(deps.playwright)}, but @playwright/mcp ${mcpVersion} needs ${wanted}`,
+    },
+  ];
 }
 
 function checkTraefikTimeouts(root: string, files: string[]): Problem[] {

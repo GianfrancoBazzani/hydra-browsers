@@ -4,6 +4,7 @@
 import { sql } from 'drizzle-orm';
 import {
   blob,
+  check,
   index,
   integer,
   primaryKey,
@@ -165,6 +166,35 @@ export const auditEvents = sqliteTable(
   ],
 );
 
+/** Spec sections 6.9 and 13.1. Each value is AES-256-GCM ciphertext (spec section 6.9.3). */
+export const vaultCredentials = sqliteTable(
+  'vault_credentials',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id),
+    name: text('name').notNull(),
+    /** The origin, for example https://www.google.com. */
+    website: text('website').notNull(),
+    usernameEnc: blob('username_enc', { mode: 'buffer' }),
+    passwordEnc: blob('password_enc', { mode: 'buffer' }),
+    totpEnc: blob('totp_enc', { mode: 'buffer' }),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    index('vault_credentials_session_idx').on(table.sessionId),
+    check(
+      'vault_credentials_has_value',
+      sql`${table.usernameEnc} IS NOT NULL OR ${table.passwordEnc} IS NOT NULL OR ${table.totpEnc} IS NOT NULL`,
+    ),
+  ],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type LoginSessionRow = typeof loginSessions.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
@@ -172,3 +202,4 @@ export type SessionMemberRow = typeof sessionMembers.$inferSelect;
 export type AgentTokenRow = typeof agentTokens.$inferSelect;
 export type LiveGrantRow = typeof liveGrants.$inferSelect;
 export type AuditEventRow = typeof auditEvents.$inferSelect;
+export type VaultCredentialRow = typeof vaultCredentials.$inferSelect;

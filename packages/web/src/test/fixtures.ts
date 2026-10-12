@@ -1,6 +1,7 @@
 import type {
   Action,
   AuditEvent,
+  Credential,
   Me,
   Member,
   SessionResource,
@@ -17,7 +18,7 @@ export const SID_2 = 'z7x6c5v4b3n2';
 export const ANA_ID = '01J9ZB3K8M2N4P6Q8R0S2T4V6W';
 export const BEN_ID = '01J9ZB3K8M2N4P6Q8R0S2T4V6X';
 
-export const VIEWER_RIGHTS: Action[] = ['session.read', 'live.watch'];
+export const VIEWER_RIGHTS: Action[] = ['session.read', 'live.watch', 'vault.read'];
 export const OPERATOR_RIGHTS: Action[] = [
   ...VIEWER_RIGHTS,
   'live.control',
@@ -33,6 +34,8 @@ export const OWNER_RIGHTS: Action[] = [
   'session.update',
   'session.share',
   'session.delete',
+  'vault.manage',
+  'vault.reveal',
 ];
 
 export function makeMe(overrides: Partial<Me> = {}): Me {
@@ -118,6 +121,23 @@ export function makeAuditEvent(overrides: Partial<AuditEvent> = {}): AuditEvent 
     sessionId: SID,
     status: 'ok',
     data: { tool: 'browser_click', durationMs: 230 },
+    ...overrides,
+  };
+}
+
+export function makeCredential(overrides: Partial<Credential> = {}): Credential {
+  return {
+    id: '01J9ZC0000000000000000CRD1',
+    name: 'Google - Catalina',
+    website: 'https://www.google.com',
+    matchDomain: 'google.com',
+    matchSubdomains: true,
+    username: 'catalina@example.com',
+    hasPassword: true,
+    hasTotp: true,
+    createdBy: { id: ANA_ID, displayName: 'Ana' },
+    createdAt: T0,
+    updatedAt: T0,
     ...overrides,
   };
 }

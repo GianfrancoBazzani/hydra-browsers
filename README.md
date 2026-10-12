@@ -20,6 +20,9 @@ session through MCP and control the same Chromium tabs.
   keyboard. The live view uses a separate origin from the dashboard.
 - **MCP for AI agents.** Each session has an MCP endpoint (Streamable HTTP, Playwright MCP). The
   dashboard gives a `claude mcp add` command and an `mcpServers` JSON config that you can copy.
+- **Secrets vault.** Each session has a vault of credentials (username, password, TOTP secret). An
+  agent fills these values into a login form with the `vault_fill` MCP tool and never sees them. The
+  gateway encrypts the values and removes them from all MCP responses.
 
 ## How it works
 
@@ -88,6 +91,8 @@ The repository does not create the cloud resources. Prepare these items first:
 - Two DNS records to the public IP, for example `hydra.example.com` (dashboard, API, and MCP) and
   `live.hydra.example.com` (live view). The two hostnames must have the same registrable domain.
 - A persistent volume for the state folder (default `/var/lib/hydra`), with daily snapshots.
+- Clock synchronization on the server (for example chrony with the Amazon Time Sync Service). The
+  TOTP codes of the vault depend on the clock.
 
 ### Install k3s on the server
 

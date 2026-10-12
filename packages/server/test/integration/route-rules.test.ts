@@ -83,6 +83,19 @@ function sessionRoutes(sid: string, userId: string): Route[] {
     { method: 'POST', url: `/api/sessions/${sid}/delete`, body: { confirmName: 'x' } }, // plan 04
     { method: 'GET', url: `/api/sessions/${sid}/logs?container=neko` }, // plan 04
     { method: 'POST', url: `/api/sessions/${sid}/live-ticket` }, // plan 06
+    { method: 'GET', url: `/api/sessions/${sid}/vault` }, // secrets vault
+    {
+      method: 'POST',
+      url: `/api/sessions/${sid}/vault`,
+      body: { name: 'x', website: 'example.com', password: 'p' },
+    },
+    { method: 'PATCH', url: `/api/sessions/${sid}/vault/some-credential`, body: { name: 'x' } },
+    { method: 'DELETE', url: `/api/sessions/${sid}/vault/some-credential` },
+    {
+      method: 'POST',
+      url: `/api/sessions/${sid}/vault/some-credential/reveal`,
+      body: { field: 'password' },
+    },
   ];
 }
 

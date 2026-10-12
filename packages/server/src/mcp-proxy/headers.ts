@@ -3,7 +3,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 
 export { SHARED_SECURITY_HEADERS as SECURITY_HEADERS } from '../static/headers.js';
 
-/** Playwright MCP accepts only this Host (its default host check: "localhost:<port>"; spec section 7.4). */
+/** The sidecar accepts only this Host, as the default host check of Playwright MCP does (spec section 7.4). */
 export const UPSTREAM_HOST = 'localhost:8931';
 
 /**

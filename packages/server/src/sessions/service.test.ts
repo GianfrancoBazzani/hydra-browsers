@@ -321,7 +321,7 @@ describe('rights and the session resource', () => {
     const context = { user: viewer.user, loginSessionId: 'login-viewer' };
     expect(deps.sessions.get(context, sid)).toMatchObject({
       myRole: 'viewer',
-      rights: ['session.read', 'live.watch'],
+      rights: ['session.read', 'live.watch', 'vault.read'],
     });
     expectHydraError(() => deps.sessions.stop(context, sid), 'forbidden');
     await expect(deps.sessions.logs(context, sid, 'neko')).rejects.toMatchObject({

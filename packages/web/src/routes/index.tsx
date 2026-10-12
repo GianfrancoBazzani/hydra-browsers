@@ -10,6 +10,7 @@ import { LiveView } from './sessions/live';
 import { SettingsView } from './sessions/settings';
 import { SharingView } from './sessions/sharing';
 import { TokensView } from './sessions/tokens';
+import { VaultView } from './sessions/vault';
 import { AppShell } from './shell/AppShell';
 import { HomePage } from './shell/HomePage';
 import { NotFoundPage } from './shell/NotFoundPage';
@@ -41,6 +42,7 @@ export const appRoutes: RouteObject[] = [
           { index: true, element: <SessionIndex /> },
           { path: 'live', element: <LiveView /> },
           { path: 'tokens', element: <TokensView /> },
+          { path: 'vault', element: <VaultView /> },
           { path: 'sharing', element: <SharingView /> },
           { path: 'activity', element: <ActivityView /> },
           { path: 'settings', element: <SettingsView /> },

@@ -1,7 +1,14 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '../../test/helpers/db.js';
-import { agentTokens, liveGrants, loginSessions, sessions, users } from './schema.js';
+import {
+  agentTokens,
+  liveGrants,
+  loginSessions,
+  sessions,
+  users,
+  vaultCredentials,
+} from './schema.js';
 
 describe('schema', () => {
   let testDb: TestDb;
@@ -151,5 +158,27 @@ describe('schema', () => {
       .run();
     testDb.db.delete(users).where(eq(users.id, 'u1')).run();
     expect(testDb.db.select().from(loginSessions).all()).toEqual([]);
+  });
+
+  it('rejects a vault credential without a value (CHECK constraint)', () => {
+    insertSession('vaultsession', null);
+    const row = {
+      id: '01J9ZC0000000000000000CRD1',
+      sessionId: 'vaultsession',
+      name: 'x',
+      website: 'https://example.com',
+      usernameEnc: null,
+      passwordEnc: null,
+      totpEnc: null,
+      createdBy: 'u1',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(() => testDb.db.insert(vaultCredentials).values(row).run()).toThrow(/CHECK/);
+    testDb.db
+      .insert(vaultCredentials)
+      .values({ ...row, passwordEnc: Buffer.alloc(29) })
+      .run();
+    expect(testDb.db.select().from(vaultCredentials).all()).toHaveLength(1);
   });
 });

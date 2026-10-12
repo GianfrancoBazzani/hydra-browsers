@@ -24,6 +24,9 @@ const TABLE: Array<[Action, boolean, boolean, boolean, boolean]> = [
   ['session.update', false, false, true, true],
   ['session.share', false, false, true, true],
   ['session.delete', false, false, true, true],
+  ['vault.read', true, true, true, true],
+  ['vault.manage', false, false, true, true],
+  ['vault.reveal', false, false, true, true],
 ];
 
 const OWNER_ID = 'owner-1';
@@ -115,6 +118,7 @@ describe('effectiveRole, rightsOf, nekoProfileOf', () => {
     expect(rightsOf(PRINCIPALS.viewer.user, PRINCIPALS.viewer.session)).toEqual([
       'session.read',
       'live.watch',
+      'vault.read',
     ]);
     expect(rightsOf(PRINCIPALS.owner.user, PRINCIPALS.owner.session)).toEqual([...ACTIONS]);
   });

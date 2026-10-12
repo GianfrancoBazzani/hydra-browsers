@@ -3,9 +3,20 @@ import type { Config } from '../config/index.js';
 
 export type Logger = import('pino').Logger;
 
-const SECRET_FIELDS = ['password', 'token', 'ticket'];
+/** Spec section 14: fields with credentials, tokens, tickets, and vault values. */
+const SECRET_FIELDS = [
+  'password',
+  'token',
+  'ticket',
+  'username',
+  'value',
+  'secret',
+  'totp',
+  'uri',
+  'hydraFill',
+];
 
-/** Spec section 14: the headers with credentials, and all fields named password, token, ticket. */
+/** Spec section 14: the headers with credentials, and all fields of SECRET_FIELDS. */
 export const REDACT_PATHS: readonly string[] = [
   'req.headers.authorization',
   'req.headers.cookie',

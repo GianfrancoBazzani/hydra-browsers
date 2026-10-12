@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "hydra-mcp": "./dist/main.js"
+  },
   "exports": {
     ".": {
       "@hydra/source": "./src/index.ts",
@@ -16,6 +22,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@playwright/mcp": "0.0.83"
+    "@hydra/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@playwright/mcp": "0.0.83",
+    "playwright": "1.64.0-alpha-1790635538000"
   }
 }

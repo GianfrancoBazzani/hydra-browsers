@@ -353,7 +353,7 @@ exports[`buildSessionObjects > matches the snapshot 1`] = `
             },
             {
               "command": [
-                "playwright-mcp",
+                "hydra-mcp",
                 "--cdp-endpoint",
                 "http://127.0.0.1:9222",
                 "--host",

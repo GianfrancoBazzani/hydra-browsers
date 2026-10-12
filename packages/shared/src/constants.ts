@@ -26,6 +26,9 @@ export const ACTIONS = [
   'session.update',
   'session.share',
   'session.delete',
+  'vault.read',
+  'vault.manage',
+  'vault.reveal',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -76,6 +79,10 @@ export const AUDIT_KINDS = [
   'admin.session_access',
   'mcp.connect',
   'mcp.tool_call',
+  'vault.created',
+  'vault.updated',
+  'vault.deleted',
+  'vault.revealed',
 ] as const;
 export type AuditKind = (typeof AUDIT_KINDS)[number];
 
@@ -96,3 +103,29 @@ export type LogContainer = (typeof LOG_CONTAINERS)[number];
 
 export const SESSION_NAME_MAX_LENGTH = 64;
 export const ALLOWLIST_MAX_ENTRIES = 100;
+
+/** The values of a credential (spec section 6.9.1). */
+export const VAULT_FIELDS = ['username', 'password', 'totp'] as const;
+export type VaultField = (typeof VAULT_FIELDS)[number];
+
+/** The values that a reveal returns (spec section 6.9.5). The username is metadata. */
+export const REVEAL_FIELDS = ['password', 'totp'] as const;
+export type RevealField = (typeof REVEAL_FIELDS)[number];
+
+export const TOTP_ALGORITHMS = ['SHA1', 'SHA256', 'SHA512'] as const;
+export type TotpAlgorithm = (typeof TOTP_ALGORITHMS)[number];
+export const TOTP_DIGITS = [6, 8] as const;
+export type TotpDigits = (typeof TOTP_DIGITS)[number];
+export const TOTP_PERIODS = [30, 60] as const;
+export type TotpPeriod = (typeof TOTP_PERIODS)[number];
+export const TOTP_SECRET_MIN_LENGTH = 16;
+export const TOTP_SECRET_MAX_LENGTH = 128;
+
+export const VAULT_MAX_CREDENTIALS = 50;
+export const VAULT_NAME_MAX_LENGTH = 64;
+export const VAULT_USERNAME_MAX_LENGTH = 256;
+export const VAULT_PASSWORD_MAX_LENGTH = 1024;
+/** Spec section 6.9.4: a fill does not use a code that is valid for less than 5 s more. */
+export const TOTP_FILL_MIN_REMAINING_MS = 5_000;
+/** Spec section 8.9: shorter usernames and passwords are not removed from MCP responses. */
+export const VAULT_REDACT_MIN_CHARS = 4;
