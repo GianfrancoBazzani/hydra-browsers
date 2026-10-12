@@ -1,6 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import http from 'node:http';
-import { expect, type BrowserContext, type FrameLocator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type ConsoleMessage,
+  type FrameLocator,
+  type Page,
+} from '@playwright/test';
 import { E2E } from './env.js';
 
 export interface VideoState {
@@ -48,22 +55,24 @@ export async function videoState(frame: FrameLocator): Promise<VideoState | null
   }
 }
 
+function plays(state: VideoState | null): boolean {
+  return (
+    state !== null &&
+    state.readyState >= 2 &&
+    !state.paused &&
+    state.videoWidth > 0 &&
+    state.currentTime > 0
+  );
+}
+
 /** The video plays: it has frames, it is not paused, and its time moves. */
 export async function expectVideoPlays(frame: FrameLocator, timeoutMs = 60_000): Promise<void> {
   await expect
-    .poll(
-      async () => {
-        const state = await videoState(frame);
-        return (
-          state !== null &&
-          state.readyState >= 2 &&
-          !state.paused &&
-          state.videoWidth > 0 &&
-          state.currentTime > 0
-        );
-      },
-      { message: 'the live <video> plays', timeout: timeoutMs, intervals: [1_000] },
-    )
+    .poll(async () => plays(await videoState(frame)), {
+      message: 'the live <video> plays',
+      timeout: timeoutMs,
+      intervals: [1_000],
+    })
     .toBe(true);
   const before = (await videoState(frame))?.currentTime ?? 0;
   await expect
@@ -72,6 +81,48 @@ export async function expectVideoPlays(frame: FrameLocator, timeoutMs = 60_000):
       timeout: 10_000,
     })
     .toBeGreaterThan(before);
+}
+
+/** The Neko client logs this line when its WebRTC peer fails. It does not connect again after it. */
+const NEKO_PEER_FAILED = 'peer connection state changed failed';
+
+/**
+ * Opens the Live view of a session and waits until the video plays. On a CI runner, the ICE check
+ * of the WebRTC peer of Neko can fail. If the peer fails, the function opens the Live view one more
+ * time and adds a "flaky" annotation to the test. Other failures do not cause a second attempt.
+ */
+export async function openPlayingLiveView(page: Page, sid: string): Promise<FrameLocator> {
+  let peerFailed = false;
+  const onConsole = (message: ConsoleMessage): void => {
+    if (message.text().includes(NEKO_PEER_FAILED)) {
+      peerFailed = true;
+    }
+  };
+  page.on('console', onConsole);
+  try {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      peerFailed = false;
+      const frame = await openLiveView(page, sid);
+      await expect
+        .poll(async () => peerFailed || plays(await videoState(frame)), {
+          message: 'the live <video> plays, or the Neko peer fails',
+          timeout: 60_000,
+          intervals: [1_000],
+        })
+        .toBe(true);
+      if (!peerFailed) {
+        await expectVideoPlays(frame);
+        return frame;
+      }
+      test.info().annotations.push({
+        type: 'flaky',
+        description: `The Neko WebRTC peer of session ${sid} failed (attempt ${attempt})`,
+      });
+    }
+  } finally {
+    page.off('console', onConsole);
+  }
+  throw new Error(`The Neko WebRTC peer of session ${sid} failed two times`);
 }
 
 /** Value of the live grant cookie in the browser context (HttpOnly cookies are included). */
