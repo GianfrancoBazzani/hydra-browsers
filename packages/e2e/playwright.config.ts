@@ -14,9 +14,9 @@ export default defineConfig({
   retries: 0,
   forbidOnly: Boolean(process.env.CI),
   timeout: 5 * 60_000,
-  // Below the job limits of .github/workflows (60 min for e2e and e2e-long, 90 min for nightly, with
-  // the image build before the tests): Playwright stops first, so the report is written. A full run
-  // takes about 3 min, and the long stream test about 12 min.
+  // Below the job limits of .github/workflows (60 min for e2e and e2e-long, with the image build
+  // before the tests): Playwright stops first, so the report is written. A full run takes about
+  // 3 min, and the long stream test about 12 min.
   globalTimeout: 35 * 60_000,
   expect: { timeout: 15_000 },
   // Outside the repository, so that git, Prettier, and ESLint never see the generated files.

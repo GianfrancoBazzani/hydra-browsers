@@ -5,9 +5,9 @@ import { mcpEndpoint } from '../src/mcp.js';
 
 const TEN_MINUTES = 10 * 60_000;
 
-// Runs only in the nightly workflow and on pull requests that change deploy/traefik/ or
-// scripts/versions.sh (spec section 15.3). The stream carries no data, so any idle timeout on the
-// path (Traefik entry point, gateway, undici) would close it.
+// Runs only on pull requests that change deploy/traefik/ or scripts/versions.sh (spec section
+// 15.3), or manually with `pnpm --filter @hydra/e2e run test:long`. The stream carries no data, so
+// any idle timeout on the path (Traefik entry point, gateway, undici) would close it.
 test(
   'an MCP stream stays open for 10 min through Traefik',
   { tag: '@long' },
